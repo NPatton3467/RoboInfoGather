@@ -12,7 +12,7 @@ class Prog:
     def execute(self, symbolic_info):
         results = []
 
-        for exp in expressions:
+        for exp in self.expressions:
             results.append(exp.execute(symbolic_info))
 
         return results 
