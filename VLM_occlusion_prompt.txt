@@ -1,3 +1,5 @@
-You are tasked with estimating whether or not an object of a certain type [object_type_1] is likely to be occluded in the given image, behind an object of a second type [object_type_2].
+You are tasked with estimating whether or not an object of a certain type [object_type_1] is likely to be occluded in the given image, behind an object of a second type [object_type_2]. 
+
+Moreover, you should consider the feasibility of the object being in that space. For example an instance of [object_type_1] should not be floating in free space, but should be on a support surface such as the floor or a table.
 
 Please return a boolean "True" or "False". If you expect object_type_1 is feasibly occluded by object_type_2 in the image, return "True" otherwise return "False".
