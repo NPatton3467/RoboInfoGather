@@ -127,18 +127,17 @@ class MCTS_Tree_Node():
     def legal(self, act):
         new_loc = self.get_loc(act)
 
-        nl_x = int((new_loc.x - self.map_bounds.x_min) / self.map_g)
-        nl_y = int((new_loc.y - self.map_bounds.y_min) / self.map_g)
+        xy = [new_loc.x, new_loc.y]
 
-        x_max = int((self.map_bounds.x_max - self.map_bounds.x_min) / self.map_g)
-        y_max = int((self.map_bounds.y_max - self.map_bounds.y_min) / self.map_g)
+        mxy = world_to_map(xy, self.obstacle_map.resolution, self.obstacle_map.grid_range)
 
         # Check that new location is within the map bounds
-        if nl_x not in range(0, x_max) or nl_y not in range(0, y_max):
+        if mxy[0] < 0 or mxy[0] > self.map_params['size'] or
+            mxy[1] < 0 or mxy[1] > self.map_params['size']:
             return False
         
         # Check if new location would cause a collision
-        if self.obstacle_map[nl_x, nl_y]:
+        if self.obstacle_map[mxy[0], mxy[1]]:
             return False
 
         return True

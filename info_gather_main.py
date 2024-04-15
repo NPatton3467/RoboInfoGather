@@ -48,7 +48,8 @@ def main(nl):
 
     # Setup obstacle map
     resolution = env.robots[0]._sensors['robot0:scan_link_Lidar_sensor'].occupancy_grid_resolution
-    obstacle_map = ObstacleMap(resolution)
+    grid_range = env.robots[0]._sensors['robot0:scan_link_Lidar_sensor'].occupancy_grid_range
+    obstacle_map = ObstacleMap(resolution, grid_range)
 
     # Execute each query
     query_results = []
