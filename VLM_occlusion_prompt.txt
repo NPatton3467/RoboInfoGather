@@ -1,0 +1,3 @@
+You are tasked with estimating whether or not an object of a certain type [object_type_1] is likely to be occluded in the given image, behind an object of a second type [object_type_2].
+
+Please return a boolean "True" or "False". If you expect object_type_1 is feasibly occluded by object_type_2 in the image, return "True" otherwise return "False".

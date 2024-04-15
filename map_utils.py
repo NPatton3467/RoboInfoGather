@@ -16,7 +16,7 @@ def get_map_params(obj_tp, map_original_size, map_original_resolution):
     f = open('res_pre_prompt.txt', 'r')
     pre_prompt = f.read()
     f.close()
-    prompt = pre_prompt + str(obj_tp) + "\nResolution: "
+    prompt = pre_prompt + str(obj_tp) + '\n```\nOutput:\n```\n'
 
     client = OpenAI(api_key=openai_api_key)
     response = client.chat.completions.create(

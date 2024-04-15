@@ -140,12 +140,28 @@ def get_vlm_prediction(state, obj_tp, obj_tp2):
     f.close()
 
     # Append prompt with current example
-    prompt = pre_prompt + f"Now, with the provided image, is it likely that an object of type {obj_tp} is occluded by and object of type {obj_tp2}?"
+    prompt = pre_prompt + f"Now, with the provided image, is it likely that an object of type [object_type_1 = {obj_tp}] is occluded by and object of [object_type_2 = {obj_tp2}]?"
 
-    response = asdfasdfasdf
+    PROMPT_MESSAGES = [
+        {
+            "role": "user",
+            "content": [
+                f"{prompt}",
+                *map({"image": state['robot0:eyes_Camera_sensor'], "resize": 128}, base64Frames[1000:1500:20]),
+            ],
+        },
+    ]
+    params = {
+        "model": "gpt-4-vision-preview",
+        "messages": PROMPT_MESSAGES,
+        #"max_tokens": 200,
+    }
+
+    result = client.chat.completions.create(**params)
+    response = result.choices[0].message.content
 
     # Parse response and assign bool
-    bool_response = asdfadsfasdfj;aldskjfwer;
+    bool_response = True if response == "True" else False
 
     return bool_response
 
