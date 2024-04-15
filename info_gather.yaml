@@ -85,3 +85,6 @@ planner_params:
   way_point_loc_acc: 0.15
   way_point_ang_acc: 0.09
   way_point_direction_angle: 0.04
+
+observation_calc_params:
+  dne_occluded_prob: 0.35

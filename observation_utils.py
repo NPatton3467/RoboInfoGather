@@ -1,8 +1,8 @@
 import numpy as np
-
+import cv2
 from map_utils import *
-
 from groundingdino.util.inference import predict
+from MCTS_Planner import Loc
 
 def quat_to_rot(quat):
     q0 = quat[0]
@@ -31,6 +31,7 @@ def quat_to_rot(quat):
                            [r20, r21, r22]])
                             
     return rot_matrix
+
 
 def get_real_coords(x, y, camera_pos, camera_ori, depth_image, camera_intrinsic_mat, camera_rel_pos):
     """
@@ -64,10 +65,11 @@ def get_real_coords(x, y, camera_pos, camera_ori, depth_image, camera_intrinsic_
 
     return world_coords
 
+
 def obj_detection(dino_model, obj_tp, state, feature):
     img = state['robot0:eyes_Camera_sensor_rgb']
 
-    if feature is not None:
+    if feature is None:
         TEXT_PROMPT = f'{obj_tp}'
     else:
         TEXT_PROMP = f'{obj_tp} with {feature}'
@@ -86,7 +88,207 @@ def obj_detection(dino_model, obj_tp, state, feature):
     return np.stack(boxes, logits)
 
 
-def get_vox_preds(camera_pos, camera_ori, belief, obj_tp, state, dino_model, feature=None):
+def get_new_loc(current_loc, dist, angle, res, size):
+        # In robot frame: robot direction is X-axis.
+
+        # Find the X,Y locations of the point in robot frame 
+        # from distance and angle
+        new_x = np.cos(angle) * dist
+        new_y = np.sin(angle) * dist
+
+        # Do a rotation based on robot theta to get delta x,y in real coords
+        delta_x = new_x * np.cos(current_loc.theta) - new_y * np.sin(current_loc.theta)
+        delta_y = new_x * np.sin(current_loc.theta) + new_y * np.cos(current_loc.theta)
+
+        # Get actual x and y based off of current loc
+        real_x = current_loc.x + delta_x
+        real_y = current_loc.y + delta_y
+
+        # Get Map xy
+        xy = [real_x, real_y]
+        mxy = world_to_map(xy, res, size)
+
+        return rounded_x, rounded_y
+
+
+def get_all_object_detections(state, ram_dino_model):
+    assert False # This will have to change with RAM_GROUNDING_DINO
+    img = state['robot0:eyes_Camera_sensor_rgb']
+
+    if feature is not None:
+        TEXT_PROMPT = f'{obj_tp}'
+    else:
+        TEXT_PROMP = f'{obj_tp} with {feature}'
+
+    BOX_THRESHOLD = 0.35
+    TEXT_THRESHOLD = 0.25
+
+    boxes, logits, object_names = predict(
+        model=dino_model,
+        image=img,
+        caption=TEXT_PROMPT,
+        box_threshold=BOX_THRESHOLD,
+        text_threshold=TEXT_THRESHOLD
+    )
+
+    return np.stack(boxes, object_names)
+
+
+def get_vlm_prediction(state, obj_tp, obj_tp2):
+    f = open('VLM_occlusion_prompt.txt', 'r')
+    pre_prompt = f.read()
+    f.close()
+
+    # Append prompt with current example
+    prompt = pre_prompt + f"Now, with the provided image, is it likely that an object of type {obj_tp} is occluded by and object of type {obj_tp2}?"
+
+    response = asdfasdfasdf
+
+    # Parse response and assign bool
+    bool_response = asdfadsfasdfj;aldskjfwer;
+
+    return bool_response
+
+
+
+def predict_unlikely_occluded_voxels(camera_pos, camera_ori, obj_tp, state, config, obstacle_map, feature=None):
+    """
+    Function to get a set of voxels corresponding to occlusions in current image that are unlikely to contain an
+    instance of the desired object type
+
+    Steps:
+        1. Scan robot fov (x, y only) and pick voxels that are occluded based on obstacle map
+            a. Save into regions based off of angle (i.e. adjacent angles will occlusion will correspond to same region)
+        2. Based on these voxels determine which object is blocking in image
+            a. Do based on regions of voxels. Average x,y location of region is sample, then project to image space and
+            detect object there
+        3. Query VLM with image + "is it unlikely that obj_tp is occluded behind obj_tp2 in this image"
+        4. If "yes" to above save voxel set for that object type
+    """
+
+    # Find occluded voxels
+    camera_params = config['camera_params']
+    rf_params = config['rf_params']
+    min_angle = camera_params['min_angle']
+    max_angle = camera_params['max_angle']
+    min_v_dist = camera_params['min_visual_distance']
+    max_v_dist = camera_params['max_visual_distance']
+
+    angle_delta = rf_params['angle_delta']
+    dist_delta = rf_params['dist_delta']
+
+    angle = min_angle
+    dist = min_v_dist
+
+    camera_angle_mat = quat_to_rot(camera_ori)
+    loc = Loc(camera_pos[0], camera_pos[1], np.arccos(camera_angle_mat[0][0]))
+
+    occluded_voxels = {}
+    appending_to_group = False
+    appending_to_group_angle = -1
+    while angle < max_angle:
+        found_occlusion_in_current_angle = False
+        while dist < max_v_dist:
+            # Get node that corresponds to angle and dist (relative to robot)
+            x, y = get_new_loc(loc, dist, angle, obstacle_map.resolution, obstacle_map.grid_size)
+
+            # Check that x,y are within map bounds
+            x_max = obstacle_map.grid_size
+            y_max = obstacle_map.grid_size
+            if x not in range(0, x_max) or y not in range(0, y_max):
+                break
+
+            # Can't see through obstacles so break
+            # TODO: Think about how to represent with different map
+            # granularities once LIDAR setup
+            if obstacle_map[x, y] > 0:
+                found_occlusion_in_current_angle = True
+                # Check if current angle is in occluded voxels
+                if angle in occluded_voxels:
+                    occluded_voxels[angle].append((x,y))
+
+                # Check if currently in a group
+                elif appending_to_group:
+                    occluded_voxels[appending_to_group_angle].append((x,y))
+
+                # Else need to start new group
+                else:
+                    appending_to_group = True
+                    appending_to_group_angle = angle
+
+                    occluded_voxels[appending_to_group_angle] = [(x,y)]
+
+
+            # Increment distance
+            dist += dist_delta
+
+        # Increment angle
+        angle += angle_delta
+
+        if not found_occlusion_in_current_angle:
+            appending_to_group = False
+            appending_to_group_angle = -1
+
+    
+    # Occluded voxels found
+    # Now need to reason about probability of existence behind occlusions
+
+    # First get all object predictions
+    objects = get_all_object_detections(state, ram_dino_model)
+
+    # For each group in the occluded voxels, project into image space and find object that is causing occlusion
+    return_voxels = []
+    for group in occluded_voxels:
+        x_avg = 0
+        y_avg = 0
+
+        # Calculate average xy postion
+        for x, y in occluded_voxels[group]:
+            x_avg += x / len(occluded_voxels[group])
+            y_avg += y / len(occluded_voxels[group])
+
+        # Project into pixel space
+        rvec = camera_angle_mat
+        tvec = camera_pos
+        cameraMat = camera_intrinsic_mat
+        img_point = cv2.projectPoints([x_avg, y_avg], rvec, tvec, cameraMat)
+
+        # Check if point within bbox
+        correct_bbox = None
+        correct_name = ""
+        for bbox, name in bboxes:
+            # Grounding Dino format is cxcywh
+            assert False # Check that this is the same for RAM GROUNDING DINO
+            
+            # Check if within bbox
+            if img[0] < bbox[0] + (bbox[2]/2) and img[0] > bbox[0] - (bbox[2]/2) and \
+                img[1] < bbox[1] + (bbox[3]/2) and img[1] > bbox[1] - (bbox[3]/2):
+
+                correct_bbox = bbox
+                correct_name = name
+
+                break
+
+        # If found a corresponding bounding box
+        # Calculate likelihood of existence behind occlusion with vlm
+        if correct_bbox is not None:
+            assert False # TODO 
+
+            # ASK VLM: Given img, is it likely that obj_tp is behind [correct_name]?
+            
+            likely = get_vlm_prediction(state, obj_tp, correct_name)
+
+            if not likely:
+                if return_voxels == []:
+                    return_voxels = occluded_voxels[group]
+                else:
+                    return_voxels += occluded_voxels[group]
+
+    return return_voxels
+
+
+
+def get_vox_preds(camera_pos, camera_ori, belief, obj_tp, state, dino_model, config, obstacle_map, feature=None):
     """
     Function to get predicted value of existence at each voxel (for an object type) 
     give observation
@@ -125,5 +327,16 @@ def get_vox_preds(camera_pos, camera_ori, belief, obj_tp, state, dino_model, fea
 
         # Put score in prediction output
         voxel_preds[vx, vy, vz] = score
+
+
+
+
+    # Predict score for occluded regions
+    low_likelihood_voxels = predict_unlikely_occluded_voxels(camera_pos, camera_ori, obj_tp, state, config, obstacle_map, feature)
+
+    for vox in low_likelihood_voxels:
+        # Make sure we're not contradiction previous observation scores
+        if voxel_preds[vox[0], vox[1], vox[2]] == 0:
+            voxel_preds[vox[0], vox[1], vox[2]] = config['observation_calc_params']['dne_occluded_prob']
 
     return voxel_preds

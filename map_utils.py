@@ -15,6 +15,7 @@ def get_map_params(obj_tp, map_original_size, map_original_resolution):
     # Query LLM for map resolution
     f = open('res_pre_prompt.txt', 'r')
     pre_prompt = f.read()
+    f.close()
     prompt = pre_prompt + str(obj_tp) + "\nResolution: "
 
     client = OpenAI(api_key=openai_api_key)

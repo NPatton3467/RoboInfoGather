@@ -137,7 +137,7 @@ class MCTS_Tree_Node():
             return False
         
         # Check if new location would cause a collision
-        if self.obstacle_map[mxy[0], mxy[1]]:
+        if self.obstacle_map[mxy[0], mxy[1]] > 0:
             return False
 
         return True

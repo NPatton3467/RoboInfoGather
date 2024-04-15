@@ -127,14 +127,14 @@ def pomdp_exec_loop(env, pomdp, obstacle_map, config):
             # 4. Call update for that object types belief
         for obj_tp in pomdp.bel.keys():
             # Get predictions for all voxels based on observations
-            vox_preds = get_vox_preds(camera_pos, camera_ori, pomdp.bel[obj_tp], obj_tp, state['robot0'], dino_model)
+            vox_preds = get_vox_preds(camera_pos, camera_ori, pomdp.bel[obj_tp], obj_tp, state['robot0'], dino_model, config, obstacle_map)
             pomdp.bel[obj_tp].update(vox_preds)
 
 
             # Do the same for each feature
             for feature in pomdp.bel[obj_tp].relevant_features:
                 # Get predictions for all voxels based on observations
-                vox_preds = get_vox_preds(camera_pos, camera_ori, pomdp.bel[obj_tp], obj_tp, state['robot0'], dino_model, feature)
+                vox_preds = get_vox_preds(camera_pos, camera_ori, pomdp.bel[obj_tp], obj_tp, state['robot0'], dino_model, config, obstacle_map, feature)
                 pomdp.bel[obj_tp].update(vox_preds, feature)
 
         # Update Obstacle map 

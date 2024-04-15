@@ -15,8 +15,8 @@ class ObstacleMap():
 
         log_p = np.log(p/(1-p))
 
-        inv_sensor_model = log((obs-eps)/(1-obs+eps))
+        inv_sensor_model = np.where(obs != 0, np.log((obs-eps)/(1-obs+eps)), 0)
 
-        new_log_p = log_p + inv_sensor_model
+        new_log_p = np.where(inv_sensor_model != 0, log_p + inv_sensor_model, log_p)
 
         self.p = 1 - (1/(1+np.exp(new_log_p)))
