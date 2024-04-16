@@ -4,6 +4,14 @@ from map_utils import *
 from groundingdino.util.inference import predict
 from MCTS_Planner import Loc
 
+from ram.models import ram
+from ram import inference_ram
+
+# Setup global ram model
+device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+ram_checkpoint = './pretrained/ram_plus_swin_large_14m.pth'
+ram_model = ram(pretrained=ram_checkpoint).to_device(device)
+
 def quat_to_rot(quat):
     q0 = quat[0]
     q1 = quat[1]
@@ -111,14 +119,10 @@ def get_new_loc(current_loc, dist, angle, res, size):
         return rounded_x, rounded_y
 
 
-def get_all_object_detections(state, ram_dino_model):
-    assert False # This will have to change with RAM_GROUNDING_DINO
+def get_all_object_detections(state, dino_model):
     img = state['robot0:eyes_Camera_sensor_rgb']
-
-    if feature is not None:
-        TEXT_PROMPT = f'{obj_tp}'
-    else:
-        TEXT_PROMP = f'{obj_tp} with {feature}'
+        
+    TEXT_PROMP = inference_ram(img, ram_model)
 
     BOX_THRESHOLD = 0.35
     TEXT_THRESHOLD = 0.25
@@ -167,7 +171,7 @@ def get_vlm_prediction(state, obj_tp, obj_tp2):
 
 
 
-def predict_unlikely_occluded_voxels(camera_pos, camera_ori, obj_tp, state, config, obstacle_map, belief, feature=None):
+def predict_unlikely_occluded_voxels(camera_pos, camera_ori, obj_tp, state, config, obstacle_map, belief, ram_grounded_sam_model, feature=None):
     """
     Function to get a set of voxels corresponding to occlusions in current image that are unlikely to contain an
     instance of the desired object type
@@ -280,7 +284,7 @@ def predict_unlikely_occluded_voxels(camera_pos, camera_ori, obj_tp, state, conf
     # Now need to reason about probability of existence behind occlusions
 
     # First get all object predictions
-    objects = get_all_object_detections(state, ram_dino_model)
+    objects = get_all_object_detections(state, ram_grounded_sam_model)
 
 
     # For each group in the occluded voxels, project into image space and find object that is causing occlusion
@@ -333,7 +337,7 @@ def predict_unlikely_occluded_voxels(camera_pos, camera_ori, obj_tp, state, conf
                     else:
                         return_voxels += occluded_voxels[group]
 
-    assert False # Need to figure out z dim
+
     return return_voxels
 
 
@@ -385,8 +389,10 @@ def get_vox_preds(camera_pos, camera_ori, belief, obj_tp, state, dino_model, con
     low_likelihood_voxels = predict_unlikely_occluded_voxels(camera_pos, camera_ori, obj_tp, state, config, belief, obstacle_map, feature)
 
     for vox in low_likelihood_voxels:
-        # Make sure we're not contradiction previous observation scores
-        if voxel_preds[vox[0], vox[1], vox[2]] == 0:
-            voxel_preds[vox[0], vox[1], vox[2]] = config['observation_calc_params']['dne_occluded_prob']
+        # Loop throught z-dim
+        for z in belief.z_dim:
+            # Make sure we're not contradiction previous observation scores
+            if voxel_preds[vox[0], vox[1], z] == 0:
+                voxel_preds[vox[0], vox[1], z] = config['observation_calc_params']['dne_occluded_prob']
 
     return voxel_preds
