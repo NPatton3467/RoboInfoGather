@@ -37,6 +37,10 @@ def get_map_params(obj_tp, map_original_size, map_original_resolution):
 def world_to_map(xy, map_resolution, map_size):
     return np.flip((np.array(xy) / map_resolution + map_size / 2.0)).astype(np.int)
 
+def map_to_world(xy, map_resolution, map_size):
+    axis = 0 if len(xy.shape) == 1 else 1
+    return np.flip((xy - map_size / 2.0) * map_resolution, axis=axis)
+
 def get_trav_map(maps_path, floor, resolution, og_resolution):
         """
         Loads the traversability map

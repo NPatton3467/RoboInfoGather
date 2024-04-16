@@ -22,7 +22,7 @@ class ObjTpBel():
         self.p = np.where((self.p == 255), 0.5, 0)
 
         # Need to replicate vertically
-        z_dim = int(self.config['rf_params']['map_height'] / self.map_params['res'])
+        self.z_dim = int(self.config['rf_params']['map_height'] / self.map_params['res'])
         temp_p = [self.p for i in range(z_dim)]
         self.p = np.stack(temp_p, axis=2)
 

@@ -167,7 +167,7 @@ def get_vlm_prediction(state, obj_tp, obj_tp2):
 
 
 
-def predict_unlikely_occluded_voxels(camera_pos, camera_ori, obj_tp, state, config, obstacle_map, feature=None):
+def predict_unlikely_occluded_voxels(camera_pos, camera_ori, obj_tp, state, config, obstacle_map, belief, feature=None):
     """
     Function to get a set of voxels corresponding to occlusions in current image that are unlikely to contain an
     instance of the desired object type
@@ -202,37 +202,46 @@ def predict_unlikely_occluded_voxels(camera_pos, camera_ori, obj_tp, state, conf
     occluded_voxels = {}
     appending_to_group = False
     appending_to_group_angle = -1
+    appending_to_group_count = 0 # This is for "erosion" -> remove first and last angle in group
     while angle < max_angle:
         found_occlusion_in_current_angle = False
         while dist < max_v_dist:
             # Get node that corresponds to angle and dist (relative to robot)
-            x, y = get_new_loc(loc, dist, angle, obstacle_map.resolution, obstacle_map.grid_size)
+            x, y = get_new_loc(loc, dist, angle, belief.map_params['res'], belief.map_params['size'])
 
             # Check that x,y are within map bounds
-            x_max = obstacle_map.grid_size
-            y_max = obstacle_map.grid_size
+            x_max = belief.map_params['size']
+            y_max = belief.map_params['size']
             if x not in range(0, x_max) or y not in range(0, y_max):
                 break
 
             # Can't see through obstacles so break
-            # TODO: Think about how to represent with different map
-            # granularities once LIDAR setup
-            if obstacle_map[x, y] > 0:
+            o_map_xy = world_to_map(map_to_world([x, y], belief.map_params['res'], belief.map_params['size']),\
+                obstacle_map.resolution, obstacle_map.grid_size)
+            if obstacle_map[o_map_xy[0], o_map_xy[1]] > 0:
                 found_occlusion_in_current_angle = True
                 # Check if current angle is in occluded voxels
                 if angle in occluded_voxels:
-                    occluded_voxels[angle].append((x,y))
+                    if appending_to_group_count in occluded_voxels[angle]:
+                        if (x,y) not in occluded_voxels[angle][appending_to_group_count]:
+                            occluded_voxels[angle][appending_to_group_count].append((x,y))
+                    else:
+                        occluded_voxels[angle][appending_to_group_count] = [(x,y)]
 
                 # Check if currently in a group
                 elif appending_to_group:
-                    occluded_voxels[appending_to_group_angle].append((x,y))
+                    if appending_to_group_count in occluded_voxels[appending_to_group_angle]:
+                        if (x,y) not in occluded_voxels[appending_to_group_angle][appending_to_group_count]:
+                            occluded_voxels[appending_to_group_angle][appending_to_group_count].append((x,y))
+                    else:
+                        occluded_voxels[appending_to_group_angle][appending_to_group_count] = [(x,y)]
 
                 # Else need to start new group
                 else:
                     appending_to_group = True
                     appending_to_group_angle = angle
 
-                    occluded_voxels[appending_to_group_angle] = [(x,y)]
+                    occluded_voxels[appending_to_group_angle] = {appending_to_group_count : [(x,y)]}
 
 
             # Increment distance
@@ -240,10 +249,31 @@ def predict_unlikely_occluded_voxels(camera_pos, camera_ori, obj_tp, state, conf
 
         # Increment angle
         angle += angle_delta
+        appending_to_group_count += 1
 
         if not found_occlusion_in_current_angle:
             appending_to_group = False
             appending_to_group_angle = -1
+            appending_to_group_count = 0
+
+
+    # Now erode voxels at angle boundary of groups (first and last)
+    # The idea here is we want to make sure that an object whose center is *anywhere* in that voxel
+    # is occluded, and we consider *only* those such voxels
+    non_eroded_voxels = occluded_voxels
+    occluded_voxels = {}
+    for group in non_eroded_voxels:
+        if len(non_eroded_voxels[group]) < 3:
+            continue
+
+        else:
+            temp_dict = non_eroded_voxels[group]
+            _ = temp_dict.pop(len(temp_dict) - 1)
+            _ = temp_dict.pop(0)
+
+            occluded_voxels[group] = []
+            for sub_group in temp_dict:
+                occluded_voxels[group] += temp_dict[sub_group]
 
     
     # Occluded voxels found
@@ -251,6 +281,7 @@ def predict_unlikely_occluded_voxels(camera_pos, camera_ori, obj_tp, state, conf
 
     # First get all object predictions
     objects = get_all_object_detections(state, ram_dino_model)
+
 
     # For each group in the occluded voxels, project into image space and find object that is causing occlusion
     return_voxels = []
@@ -260,46 +291,49 @@ def predict_unlikely_occluded_voxels(camera_pos, camera_ori, obj_tp, state, conf
 
         # Calculate average xy postion
         for x, y in occluded_voxels[group]:
-            x_avg += x / len(occluded_voxels[group])
-            y_avg += y / len(occluded_voxels[group])
+            if temp_map[x,y] == 1:
+                x_avg += x / len(occluded_voxels[group])
+                y_avg += y / len(occluded_voxels[group])
 
-        # Project into pixel space
-        rvec = camera_angle_mat
-        tvec = camera_pos
-        cameraMat = camera_intrinsic_mat
-        img_point = cv2.projectPoints([x_avg, y_avg], rvec, tvec, cameraMat)
+        if x_avg != 0.0 and y_avg != 0.0:
+            # Project into pixel space
+            rvec = camera_angle_mat
+            tvec = camera_pos
+            cameraMat = camera_intrinsic_mat
+            img_point = cv2.projectPoints([x_avg, y_avg], rvec, tvec, cameraMat)
 
-        # Check if point within bbox
-        correct_bbox = None
-        correct_name = ""
-        for bbox, name in bboxes:
-            # Grounding Dino format is cxcywh
-            assert False # Check that this is the same for RAM GROUNDING DINO
-            
-            # Check if within bbox
-            if img[0] < bbox[0] + (bbox[2]/2) and img[0] > bbox[0] - (bbox[2]/2) and \
-                img[1] < bbox[1] + (bbox[3]/2) and img[1] > bbox[1] - (bbox[3]/2):
+            # Check if point within bbox
+            correct_bbox = None
+            correct_name = ""
+            for bbox, name in bboxes:
+                # Grounding Dino format is cxcywh
+                assert False # Check that this is the same for RAM GROUNDING DINO
+                
+                # Check if within bbox
+                if img[0] < bbox[0] + (bbox[2]/2) and img[0] > bbox[0] - (bbox[2]/2) and \
+                    img[1] < bbox[1] + (bbox[3]/2) and img[1] > bbox[1] - (bbox[3]/2):
 
-                correct_bbox = bbox
-                correct_name = name
+                    correct_bbox = bbox
+                    correct_name = name
 
-                break
+                    break
 
-        # If found a corresponding bounding box
-        # Calculate likelihood of existence behind occlusion with vlm
-        if correct_bbox is not None:
-            assert False # TODO 
+            # If found a corresponding bounding box
+            # Calculate likelihood of existence behind occlusion with vlm
+            if correct_bbox is not None:
+                assert False # TODO 
 
-            # ASK VLM: Given img, is it likely that obj_tp is behind [correct_name]?
-            
-            likely = get_vlm_prediction(state, obj_tp, correct_name)
+                # ASK VLM: Given img, is it likely that obj_tp is behind [correct_name]?
+                
+                likely = get_vlm_prediction(state, obj_tp, correct_name)
 
-            if not likely:
-                if return_voxels == []:
-                    return_voxels = occluded_voxels[group]
-                else:
-                    return_voxels += occluded_voxels[group]
+                if not likely:
+                    if return_voxels == []:
+                        return_voxels = occluded_voxels[group]
+                    else:
+                        return_voxels += occluded_voxels[group]
 
+    assert False # Need to figure out z dim
     return return_voxels
 
 
@@ -348,7 +382,7 @@ def get_vox_preds(camera_pos, camera_ori, belief, obj_tp, state, dino_model, con
 
 
     # Predict score for occluded regions
-    low_likelihood_voxels = predict_unlikely_occluded_voxels(camera_pos, camera_ori, obj_tp, state, config, obstacle_map, feature)
+    low_likelihood_voxels = predict_unlikely_occluded_voxels(camera_pos, camera_ori, obj_tp, state, config, belief, obstacle_map, feature)
 
     for vox in low_likelihood_voxels:
         # Make sure we're not contradiction previous observation scores
