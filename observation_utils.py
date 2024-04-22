@@ -7,6 +7,8 @@ from MCTS_Planner import Loc
 from ram.models import ram
 from ram import inference_ram
 
+import torch
+
 # Setup global ram model
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 ram_checkpoint = './pretrained/ram_plus_swin_large_14m.pth'

@@ -106,7 +106,8 @@ def pomdp_exec_loop(env, pomdp, obstacle_map, config):
     time_steps_since_MCTS = 0
 
     # Run until complete
-    while not pomdp.enough_info():
+    done, symbolic_info = pomdp.enough_info()
+    while not done:
         # Get next action
         if reached_way_point or time_steps_since_MCTS > config['planner_params']['max_time_wo_replan']:
             way_point = MCTS_planner_exec(pomdp, config)
@@ -142,3 +143,8 @@ def pomdp_exec_loop(env, pomdp, obstacle_map, config):
         grid_preds = lidar_sensor.get_local_occupancy_grid(state['robot0']['robot0:scan_link_Lidar_sensor_scan'])
 
         obstacle_map.update(grid_preds)
+
+        # Check if Done
+        done, symbolic_info = pomdp.enough_info()
+
+    return symbolic_info

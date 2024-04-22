@@ -34,7 +34,9 @@ class ObjTpBel():
         # Belief over features
         self.feature_bels = {}
         for feature in self.relevant_features:
-            self.feature_bels[feature] = np.copy(self.p)
+            feature_dict = {'bel': np.copy(self.p), "thresh" : feature['thresh']}
+            self.feature_bels[feature['name']] = feature_dict
+
 
 
     def update(self, obs, eps=1e-6, feature=None):
