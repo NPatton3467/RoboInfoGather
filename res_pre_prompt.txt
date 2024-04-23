@@ -9,7 +9,7 @@ Output:
 dimensions:
   height = 0.11 meters
   width = 0.08 meters
-grid_size = 0.11 meters by 0.11 meters by 0.11 meters
+grid_size = 0.11 meters
 ```
 
 
@@ -22,7 +22,7 @@ Output:
 dimensions:
   height = 0.86 meters
   width = 0.5 meters
-grid_size = 0.8 meters by 0.8 meters by 0.8 meters
+grid_size = 0.8 meters
 ```
 
 Example 3:
@@ -34,106 +34,10 @@ Output:
 dimensions:
   height = 0.006 meters
   width = 0.19 meters
-grid_size = 0.19 meters by 0.19 meters by 0.19 meters
+grid_size = 0.19 meters
 ```
 
 
 With the above examples in mind, return a grid size for the object type provided below.
 ```
-candidate_objects = watch
-```
-Output:
-```
-Given a candidate object, return a grid resolution based on the average size of that object, such that the object only exists in one grid space, based on the largest dimension of the object.
-
-Example 1:
-```
-object = Cup
-```
-Output:
-```
-dimensions:
-  height = 0.11 meters
-  width = 0.08 meters
-grid_size = 0.11 meters by 0.11 meters by 0.11 meters
-```
-
-
-Example 2:
-```
-object = Chair
-```
-Output:
-```
-dimensions:
-  height = 0.86 meters
-  width = 0.5 meters
-grid_size = 0.8 meters by 0.8 meters by 0.8 meters
-```
-
-Example 3:
-```
-object = Pencil
-```
-Output:
-```
-dimensions:
-  height = 0.006 meters
-  width = 0.19 meters
-grid_size = 0.19 meters by 0.19 meters by 0.19 meters
-```
-
-
-With the above examples in mind, return a grid size for the object type provided below.
-```
-candidate_objects = watch
-```
-Output:
-```
-dimensions:
-  height = 0.04 meters
-  width = 0.04 meters
-grid_size = 0.04 meters by 0.04 meters by 0.04 meters
-```Given a candidate object, return a grid resolution based on the average size of that object, such that the object only exists in one grid space, based on the largest dimension of the object.
-
-Example 1:
-```
-object = Cup
-```
-Output:
-```
-dimensions:
-  height = 0.11 meters
-  width = 0.08 meters
-grid_size = 0.11 meters by 0.11 meters by 0.11 meters
-```
-
-
-Example 2:
-```
-object = Chair
-```
-Output:
-```
-dimensions:
-  height = 0.86 meters
-  width = 0.5 meters
-grid_size = 0.8 meters by 0.8 meters by 0.8 meters
-```
-
-Example 3:
-```
-object = Pencil
-```
-Output:
-```
-dimensions:
-  height = 0.006 meters
-  width = 0.19 meters
-grid_size = 0.19 meters by 0.19 meters by 0.19 meters
-```
-
-
-With the above examples in mind, return a grid size for the object type provided below.
-```
-object = 
+candidate_objects = 

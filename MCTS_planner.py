@@ -5,11 +5,7 @@ import random
 
 import numpy as np
 
-import actionlib
-
 from enum import Enum
-
-from prolex_msgs.msg import GoToAction, GoToGoal, GoToFeedback, GoToResult
 
 class Loc():
     def __init__(self, x, y, theta=None):
@@ -132,7 +128,7 @@ class MCTS_Tree_Node():
         mxy = world_to_map(xy, self.obstacle_map.resolution, self.obstacle_map.grid_range)
 
         # Check that new location is within the map bounds
-        if mxy[0] < 0 or mxy[0] > self.map_params['size'] or
+        if mxy[0] < 0 or mxy[0] > self.map_params['size'] or\
             mxy[1] < 0 or mxy[1] > self.map_params['size']:
             return False
         

@@ -4,6 +4,8 @@ from program_utils import *
 from pomdp import *
 from obstacle_map import *
 
+import argparse
+
 def main(nl):
     """
     Main loop for info gathering. Given a natural language query, generate a program in our dsl.
@@ -16,7 +18,7 @@ def main(nl):
     """
 
     # Load the config
-    config_filename = os.path.join(f"info_gather.yaml")
+    config_filename = os.path.join(f"./RoboInfoGather/info_gather.yaml")
     config = yaml.load(open(config_filename, "r"), Loader=yaml.FullLoader)
 
     # check if we want to quick load or full load the scene
@@ -24,7 +26,7 @@ def main(nl):
         "Quick": "Only load the building assets (i.e.: the floors, walls, doors)",
         "Full": "Load all interactive objects in the scene",
     }
-    load_mode = choose_from_options(options=load_options, name="load mode", random_selection=random_selection)
+    load_mode = choose_from_options(options=load_options, name="load mode", random_selection=False)
     if load_mode == "Quick":
         config["scene"]["load_object_categories"] = ["floors", "walls", "door"]
 
@@ -66,3 +68,14 @@ def main(nl):
     env.close()
 
     return query_reults
+
+
+if __name__ == '__main__':
+    parser = argparse.ArgumentParser('info_gather_main')
+    parser.add_argument('nl_query', type=str)
+
+    args = parser.parse_args()
+
+    nl = args.nl_query
+
+    results = main(nl)

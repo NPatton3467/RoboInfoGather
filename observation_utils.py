@@ -1,8 +1,8 @@
 import numpy as np
 import cv2
-from map_utils import *
+from RoboInfoGather.map_utils import *
 from groundingdino.util.inference import predict
-from MCTS_Planner import Loc
+from RoboInfoGather.MCTS_planner import Loc
 
 from ram.models import ram
 from ram import inference_ram
@@ -11,8 +11,11 @@ import torch
 
 # Setup global ram model
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-ram_checkpoint = './pretrained/ram_plus_swin_large_14m.pth'
-ram_model = ram(pretrained=ram_checkpoint).to_device(device)
+ram_checkpoint = 'C:\\Users\\warri\\OmniGibson\\RoboInfoGather\\pretrained\\ram_plus_swin_large_14m.pth'
+ram_model = ram(pretrained=ram_checkpoint, vit='large', image_size=384)
+ram_model.eval()
+ram_model.to(device)
+
 
 def quat_to_rot(quat):
     q0 = quat[0]
@@ -392,7 +395,7 @@ def get_vox_preds(camera_pos, camera_ori, belief, obj_tp, state, dino_model, con
 
     for vox in low_likelihood_voxels:
         # Loop throught z-dim
-        for z in belief.z_dim:
+        for z in range(belief.z_dim):
             # Make sure we're not contradiction previous observation scores
             if voxel_preds[vox[0], vox[1], z] == 0:
                 voxel_preds[vox[0], vox[1], z] = config['observation_calc_params']['dne_occluded_prob']

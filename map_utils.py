@@ -1,5 +1,12 @@
 import numpy as np
+import os
+from PIL import Image
+import cv2
 import openai
+from openai import OpenAI
+f = open('./RoboInfoGather/openaikey.txt', 'r')
+openai_api_key = f.read().rstrip('\n')
+f.close()
 
 def get_map_params(obj_tp, map_original_size, map_original_resolution):
     """
@@ -13,7 +20,7 @@ def get_map_params(obj_tp, map_original_size, map_original_resolution):
     """
 
     # Query LLM for map resolution
-    f = open('res_pre_prompt.txt', 'r')
+    f = open('./RoboInfoGather/res_pre_prompt.txt', 'r')
     pre_prompt = f.read()
     f.close()
     prompt = pre_prompt + str(obj_tp) + '\n```\nOutput:\n```\n'
@@ -23,14 +30,21 @@ def get_map_params(obj_tp, map_original_size, map_original_resolution):
         model="gpt-4",
         messages=[{"role": "user", "content": f"{prompt}"}],
         stream=False,
-        temperature=temp
+        temperature=0.0
     )
 
-    map_resolution = float(sketch = response.choices[0].message.content)
+    # Extract grid size
+    response = response.choices[0].message.content
+    grid_size_idx = response.find('grid_size')
+    response = response[grid_size_idx:]
+    response = response.lstrip('grid_size = ')
+    meters_idx = response.find('meters')
+    response = response[:meters_idx].rstrip(' ')
+    map_resolution = float(response)
 
     map_size = map_size = int(
-                    map_original_size * map_original_resolution / map_resolution
-                )
+        map_original_size * map_original_resolution / map_resolution
+    )
 
     return {'res' : map_resolution, 'og_res' : map_original_resolution, 'size' : map_size, 'og_size' : map_original_size}
 

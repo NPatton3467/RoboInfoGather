@@ -1,7 +1,7 @@
 import numpy as np
 import json
 
-from map_utils import *
+from RoboInfoGather.map_utils import *
 
 class ObjTpBel():
     def __init__(self, num, threshold, map_params, configs, relevant_features=None):
@@ -12,8 +12,6 @@ class ObjTpBel():
         self.configs = configs
         self.relevant_features = relevant_features
         
-        assert False # Need to make different sizes for different objs (external?)
-
         self.p = np.copy(self.trav_map)
 
         print(f'Belief Created with (xdim, y_dim) = ({self.p.shape})')
@@ -22,20 +20,22 @@ class ObjTpBel():
         self.p = np.where((self.p == 255), 0.5, 0)
 
         # Need to replicate vertically
-        self.z_dim = int(self.config['rf_params']['map_height'] / self.map_params['res'])
-        temp_p = [self.p for i in range(z_dim)]
+        self.z_dim = int(self.configs['rf_params']['map_height'] / self.map_params['res'])
+        temp_p = [self.p for i in range(self.z_dim)]
         self.p = np.stack(temp_p, axis=2)
 
         print('Belief shape: ', np.shape(self.p))
 
         # For copying later if we get new features to evaluate
-        self.backup_p = np.copy(p)
+        self.backup_p = np.copy(self.p)
 
         # Belief over features
         self.feature_bels = {}
-        for feature in self.relevant_features:
-            feature_dict = {'bel': np.copy(self.p), "thresh" : feature['thresh']}
-            self.feature_bels[feature['name']] = feature_dict
+        if self.relevant_features != None and self.relevant_features != [None]:
+            for feature in self.relevant_features:
+                if feature['name'] != None:
+                    feature_dict = {'bel': np.copy(self.p), "tp" : feature['tp']}
+                    self.feature_bels[feature['name']] = feature_dict
 
 
 

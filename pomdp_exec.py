@@ -13,7 +13,7 @@ from PIL import Image
 
 from omnigibson.object_states.pose import Pose
 
-from MCTS_Planner import Action
+from MCTS_planner import Action
 from observation_utils import *
 
 

@@ -1,7 +1,7 @@
 import numpy as np
 import json
-from MCTS_planner import Action
-from map_utils import *
+from RoboInfoGather.MCTS_planner import Action
+from RoboInfoGather.map_utils import *
 
 class RewardFunc():
     def __init__(self, map_params, camera_params, rf_params):

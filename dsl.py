@@ -19,7 +19,8 @@ class Prog:
 
 
 class Map:
-    def __init__(self, obj_tp, map_feature, query):
+    def __init__(self, obj_tp, map_feature, query, map_tp):
+        self.map_tp = map_tp
         self.obj_tp = obj_tp
         self.map_feature = map_feature
         self.query = query
@@ -171,7 +172,7 @@ class Aggregator:
         self.result = None
 
     def pretty_str(self):
-        return f"{self.agg_tp}({self.list.pretty_str})"
+        return f"{self.agg_tp}({self.list.pretty_str()})"
 
     def execute(self, symbolic_info):
         # List must have been completed
