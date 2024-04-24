@@ -6,6 +6,8 @@ from RoboInfoGather.observation_utils import *
 from RoboInfoGather.map_utils import *
 from RoboInfoGather.dsl import *
 
+import copy
+
 def gen_prog_from_nl(nl):
     assert False # Not complete
 
@@ -87,7 +89,7 @@ def gen_pomdp_from_query(query, pos, ori, trav_map_og_size, trav_map_og_res, con
     # Recurse on cases where "query" is aggregator, map, primitives, getnth, or count
     if type(query) is Map:
         # Add map feature to where clause for feature extraction
-        query_to_send = query.query
+        query_to_send = copy.deepcopy(query.query)
         if query.map_tp == 'feature_scalar':
             temp_where = WhereClause(where_tp=query.map_tp, obj_tp=query.obj_tp, scalar_feature=query.map_feature)
         else:

@@ -34,8 +34,24 @@ class ObjTpBel():
         if self.relevant_features != None and self.relevant_features != [None]:
             for feature in self.relevant_features:
                 if feature['name'] != None:
-                    feature_dict = {'bel': np.copy(self.p), "tp" : feature['tp']}
-                    self.feature_bels[feature['name']] = feature_dict
+                    if feature['tp'] == "feature_scalar":
+                        feature_dict = {'bel': np.copy(self.p), "tp" : feature['tp']}
+                        self.feature_bels[feature['name']] = feature_dict
+                    elif feature['tp'] == "feature_enum":
+                        # For features, we want to keep around names like colour = red
+                        x_dim, y_dim, z_dim = np.shape(self.p)
+                        bel_z = np.array(['' for _ in range(z_dim)], dtype=object)
+                        bel_y = np.array([bel_z for _ in range(y_dim)], dtype=object)
+                        bel = np.array([bel_y for _ in range(x_dim)], dtype=object)
+
+                        # Should have same shape
+                        assert np.shape(bel) == np.shape(self.p)
+
+
+                        feature_dict = {'bel': bel, "tp" : feature['tp']}
+                        self.feature_bels[feature['name']] = feature_dict
+                    else:
+                        assert False # Shouldn't get here
 
 
 
@@ -78,6 +94,7 @@ class ObjTpBel():
 
             self.p = 1 - (1/(1+np.exp(new_log_p)))
         else:
+            assert False # This needs to change to reflect aribitrary features (e.g. colour will have values of "red" here)
             p = self.feature_bels[feature]
 
             log_p = np.log(p/(1-p))

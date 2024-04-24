@@ -48,17 +48,15 @@ class POMDP():
                 for y in range(local_bel_shape[1]):
                     for z in range(local_bel_shape[2]):
                         # If passes existence threshold add to objects
-                        if local_bel[x, y, z] > local_bel.threshold:
+                        if local_bel.p[x, y, z] > local_bel.threshold:
                             # Check features (this is only enum features)
                             feature_dict = {}
-                            for feature in local_bel.feature_bels[feature]:
-                                assert False # Need to decide what to return here based on type -- e.g. enum type just return the enum
-                                            # This will effect the update as well
-                                if local_bel.feature_bels[feature['name']][x,y,z] > local_bel.feature_bels[feature['name']]['tp']:
-                                    if local_bel.feature_bels[feature['name']]['tp'] < 1:
-                                        feature_dict[feature['name']] = 1
-                                    else:
-                                        feature_dict[feature['name']] = local_bel.feature_bels[feature['name']][x,y,z]
+                            for feature in local_bel.feature_bels:
+                                if local_bel.feature_bels[feature]['tp'] == 'feature_enum' or\
+                                    local_bel.feature_bels[feature]['tp'] == 'feature_scalar':
+                                    feature_dict[feature] = local_bel.feature_bels[feature]['bel'][x,y,z]                                
+                                else:
+                                    assert False # Shouldn't get here
 
                             feature_dict['location'] = (x,y,z)
 

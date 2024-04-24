@@ -1,3 +1,5 @@
+import copy
+
 class Prog:
     def __init__(self, expressions):
         self.expressions = expressions
@@ -37,7 +39,7 @@ class Map:
 
         if self.result == {}:
             for obj_inst in self.query.result[self.obj_tp]:
-                self.result[obj_inst] = obj_inst[self.map_feature]
+                self.result[obj_inst] = self.query.result[self.obj_tp][obj_inst][self.map_feature]
 
         return self.result
 
@@ -70,7 +72,7 @@ class Primitives:
         else:
             return f"{self.prim.pretty_str()}"
 
-    def execute(self):
+    def execute(self, symbolic_info):
         if self.result == None:
             if self.prim_tp == "real":
                 self.result = self.prim
@@ -80,7 +82,7 @@ class Primitives:
                 right = 0
                 if type(self.prim) in [GetNth, Count, Aggregator]:
                     if self.prim.result == None:
-                        self.prim.execute()
+                        self.prim.execute(symbolic_info)
 
                     left = self.prim.result
                 else:
@@ -88,7 +90,7 @@ class Primitives:
                 
                 if type(self.prim2) in [GetNth, Count, Aggregator]:
                     if self.prim2.result == None:
-                        self.prim2.execute()
+                        self.prim2.execute(symbolic_info)
 
                     right = self.prim2.result
                 else:
@@ -135,8 +137,8 @@ class GetNth:
             self.list.execute(symbolic_info)
 
         if self.result == None:
-            key = list(self.list.keys())[self.index]
-            self.result = self.list[key]
+            key = list(self.list.result.keys())[self.index]
+            self.result = self.list.result[key]
 
         return self.result
 
@@ -238,10 +240,10 @@ class Query:
 
     def execute(self, symbolic_info):
         if self.result == None:
-            self.result = self.where_clause.filter(symbolic_info)
+            self.result = self.where_clause.filter(copy.deepcopy(symbolic_info))
 
-            if len(self.result) > self.limit:
-                self.result = self.result[0:self.limit]
+            if len(self.result[self.obj_tp]) > self.limit and self.limit > 0:
+                self.result = self.result[self.obj_tp][0:self.limit]
 
         return self.result
 
@@ -303,74 +305,57 @@ class WhereClause:
             return "true"
 
     def filter(self, symbolic_info):
-        ret_symb_info = symbolic_info
-        if self.where_tp == "feature_enum":
-            temp_list = []
-            for obj_dict in ret_symb_info[self.obj_tp]:
-                if self.enum_feature in obj_dict and obj_dict[self.enum_feature] == self.enum_param:
-                    temp_list.append(obj_dict)
-
-            ret_symb_info[self.obj_tp] = temp_list
-
-        elif self.where_tp == "feature_scalar":
+        ret_symb_info = {}
+        if self.where_tp == 'true':
+            ret_symb_info = copy.deepcopy(symbolic_info)
+        elif self.where_tp == "feature_enum" or self.where_tp =="feature_scalar":
+            comp = "=="
             if self.scalar_comparator == "Lt":
-                temp_list = []
-                for obj_dict in ret_symb_info[self.obj_tp]:
-                    if self.scalar_feature in obj_dict and obj_dict[self.scalar_feature] < self.scalar_param:
-                        temp_list.append(obj_dict)
-
-                ret_symb_info[self.obj_tp] = temp_list
-
+                comp = "<"
             elif self.scalar_comparator == "Leq":
-                temp_list = []
-                for obj_dict in ret_symb_info[self.obj_tp]:
-                    if self.scalar_feature in obj_dict and obj_dict[self.scalar_feature] <= self.scalar_param:
-                        temp_list.append(obj_dict)
-
-                ret_symb_info[self.obj_tp] = temp_list
-                
-            elif self.scalar_comparator == "Eq":
-                temp_list = []
-                for obj_dict in ret_symb_info[self.obj_tp]:
-                    if self.scalar_feature in obj_dict and obj_dict[self.scalar_feature] == self.scalar_param:
-                        temp_list.append(obj_dict)
-
-                ret_symb_info[self.obj_tp] = temp_list
-                
+                comp = "<="
             elif self.scalar_comparator == "Geq":
-                temp_list = []
-                for obj_dict in ret_symb_info[self.obj_tp]:
-                    if self.scalar_feature in obj_dict and obj_dict[self.scalar_feature] >= self.scalar_param:
-                        temp_list.append(obj_dict)
-
-                ret_symb_info[self.obj_tp] = temp_list
-                
+                comp = ">="
             elif self.scalar_comparator == "Gt":
-                temp_list = []
-                for obj_dict in ret_symb_info[self.obj_tp]:
-                    if self.scalar_feature in obj_dict and obj_dict[self.scalar_feature] > self.scalar_param:
-                        temp_list.append(obj_dict)
+                comp = ">"
+            elif self.scalar_comparator == "Neq":
+                comp = "!="
 
-                ret_symb_info[self.obj_tp] = temp_list
-                
+            temp_dict = {}
+            for inst in symbolic_info[self.obj_tp]:
+                if self.where_tp == "feature_enum":
+                    if self.enum_feature in symbolic_info[self.obj_tp][inst] and\
+                      eval(f"'{symbolic_info[self.obj_tp][inst][self.enum_feature]}' {comp} '{self.enum_param}'"):
+                        
+                        temp_dict[inst] = symbolic_info[self.obj_tp][inst]
+
+                elif self.where_tp == "feature_scalar":
+                    if self.scalar_feature in symbolic_info[self.obj_tp][inst] and\
+                      eval(f"{symbolic_info[self.obj_tp][inst][self.scalar_feature]} {comp} {self.scalar_param}"):
+                        
+                        temp_dict[inst] = symbolic_info[self.obj_tp][inst]
+
+            ret_symb_info[self.obj_tp] = temp_dict                
 
         elif self.where_tp == "max":
             temp_obj = None
             max_val = -1
-            for obj_dict in ret_symb_info[self.obj_tp]:
-                if self.scalar_feature in obj_dict and (obj_dict[self.scalar_feature] > max_val or max_val == -1):
-                    temp_obj = obj_dict
-                    max_val = obj_dict[self.scalar_feature]
+            for inst in symbolic_info[self.obj_tp]:
+                if self.scalar_feature in symbolic_info[self.obj_tp][inst] and\
+                 (symbolic_info[self.obj_tp][inst][self.scalar_feature] > max_val or max_val == -1):
+                    temp_obj = {inst: symbolic_info[self.obj_tp][inst]}
+                    max_val = symbolic_info[self.obj_tp][inst][self.scalar_feature]
 
             ret_symb_info[self.obj_tp] = temp_obj
 
         elif self.where_tp == "min":
             temp_obj = None
             min_val = -1
-            for obj_dict in ret_symb_info[self.obj_tp]:
-                if self.scalar_feature in obj_dict and (obj_dict[self.scalar_feature] > min_val or min_val == -1):
-                    temp_obj = obj_dict
-                    min_val = obj_dict[self.scalar_feature]
+            for inst in symbolic_info[self.obj_tp]:
+                if self.scalar_feature in symbolic_info[self.obj_tp][inst] and\
+                 (symbolic_info[self.obj_tp][inst][self.scalar_feature] < min_val or min_val == -1):
+                    temp_obj = {inst: symbolic_info[self.obj_tp][inst]}
+                    min_val = symbolic_info[self.obj_tp][inst][self.scalar_feature]
 
             ret_symb_info[self.obj_tp] = temp_obj
 
@@ -379,48 +364,43 @@ class WhereClause:
             return f"{self.spatial_relation}({self.obj_tp}, {self.obj_tp2})"
 
         elif self.where_tp == "and":
-            ret_symb_info = self.sub_where_clause[0].filter(ret_symb_info)
+            ret_symb_info = self.sub_where_clause[0].filter(symbolic_info)
             ret_symb_info = self.sub_where_clause[1].filter(ret_symb_info)
 
         elif self.where_tp == "or":
-            left_symb_info = self.sub_where_clause[0].filter(ret_symb_info)
-            right_symb_info = self.sub_where_clause[1].filter(ret_symb_info)
+            left_symb_info = self.sub_where_clause[0].filter(symbolic_info)
+            right_symb_info = self.sub_where_clause[1].filter(symbolic_info)
 
+            
             # Combine
-            temp_ret_info = {}
-            for obj_tp in ret_symb_info:
+            ret_symb_info = {}
+            for obj_tp in symbolic_info:
                 if obj_tp in left_symb_info or obj_tp in right_symb_info:
-                    temp_list = []
-                    for obj_dict in ret_symb_info[obj_tp]:
+                    temp_dict = {}
+                    for inst in symbolic_info[obj_tp]:
                         inleft = False
                         inright = False
 
-                        for l_obj_dict in left_symb_info[obj_tp]:
-                            if obj_dict['id'] == l_obj_dict['id']:
-                                inleft = True
-                                break
+                        if inst in left_symb_info[obj_tp]:
+                            inleft = True
 
-                        for r_obj_dict in right_symb_info[obj_tp]:
-                            if obj_dict['id'] == r_obj_dict['id']:
-                                inright = True
-                                break
+                        if inst in right_symb_info[obj_tp]:
+                            inright = True
 
                         if inleft or inright:
-                            temp_list.append(obj_dict)
+                            temp_dict[inst] = symbolic_info[obj_tp][inst]
                     
-                    temp_ret_info[obj_tp] = temp_list
-
-            ret_symb_info = temp_ret_info
+                    ret_symb_info[obj_tp] = temp_dict
 
         elif self.where_tp == "not":
             return f"!({self.sub_where_clause[0].pretty_str()})"
 
-            true_ret_info = self.sub_where_clause[0].filter(ret_symb_info)
+            true_ret_info = self.sub_where_clause[0].filter(symbolic_info)
 
             # Compare to ret symb info
             # Remove version that are in true_ret_info
             keep_obj_list = []
-            for obj_dict in ret_symb_info[self.obj_tp]:
+            for obj_dict in symbolic_info[self.obj_tp]:
                 in_true = False
 
                 for t_obj_dict in true_ret_info[self.obj_tp]:
