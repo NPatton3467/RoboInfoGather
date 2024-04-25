@@ -5,43 +5,18 @@ from RoboInfoGather.program_utils import *
 import os
 import yaml
 
-# import omnigibson as og
-# from omnigibson.utils.ui_utils import choose_from_options
-
 from collections import OrderedDict
 from matplotlib import pyplot as plt
 import numpy as np
 import cv2
 from PIL import Image
 
-# from omnigibson.object_states.pose import Pose
 
 # Load the config
 config_filename = os.path.join(f"./RoboInfoGather/info_gather.yaml")
 config = yaml.load(open(config_filename, "r"), Loader=yaml.FullLoader)
 
-# # Start omni gibson
-# # check if we want to quick load or full load the scene
-# load_options = {
-#     "Quick": "Only load the building assets (i.e.: the floors, walls, doors)",
-#     "Full": "Load all interactive objects in the scene",
-# }
-# load_mode = choose_from_options(options=load_options, name="load mode", random_selection=False)
-# if load_mode == "Quick":
-#     config["scene"]["load_object_categories"] = ["floors", "walls", "door"]
-
-# # Load the environment
-# env = og.Environment(configs=config)
-
-# # Allow user to move camera more easily
-# og.sim.enable_viewer_camera_teleoperation()
-
-# # Reset env before start? 
-# og.log.info("Resetting environment")
-# env.reset()
-
 # Get trav_map
-# og_resolution = env.scene._trav_map.map_default_resolution
 og_resolution = config['scene']['trav_map_resolution']
 trav_map = get_trav_map(config['scene']['trav_map_path'], config['scene']['floor'], og_resolution, og_resolution)
 map_size, _ = trav_map.shape
@@ -49,7 +24,7 @@ map_size, _ = trav_map.shape
 # Get Position/orientation
 pos = np.array([4.31607878e-05, -6.68951543e-08,  9.91712511e-03])
 ori = np.array([4.32668778e-04, -3.11666692e-04, -3.01003456e-06,  9.99999881e-01])
-# pos, ori = env.robots[0].get_position_orientation()
+
 
 # # One cup, no whereclause = True
 # print("One cup, whereclause = true")

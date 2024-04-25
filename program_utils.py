@@ -8,6 +8,8 @@ from RoboInfoGather.dsl import *
 
 import copy
 
+from matplotlib import pyplot as plt
+
 def gen_prog_from_nl(nl):
     assert False # Not complete
 
@@ -150,6 +152,13 @@ def gen_pomdp_from_query(query, pos, ori, trav_map_og_size, trav_map_og_res, con
                     prev_pomdp.bel[obj] = gen_inform_priors
 
                 prev_pomdp.reward_funcs[obj] = RewardFunc(map_params, prev_pomdp.camera_params, prev_pomdp.rf_params)
+
+                # Add figures
+                fig = plt.figure()
+                ax = fig.add_subplot(1,1,1)
+                plt.ion()
+                plt.show()
+                prev_pomdp.figures[obj] = (fig, ax)
 
             else:
                 # Check for features

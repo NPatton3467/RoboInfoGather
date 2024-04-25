@@ -2,6 +2,8 @@ from RoboInfoGather.object_belief import *
 from RoboInfoGather.reward_func import *
 from RoboInfoGather.map_utils import *
 
+from matplotlib import pyplot as plt
+
 class POMDP():
     def __init__(self, query, robot_init_loc, obj_tp_list, trav_map_og_size, trav_map_og_res, configs):
         self.prior_beliefs = [] # For AKLD calculation
@@ -27,6 +29,16 @@ class POMDP():
                 self.bel[obj_tp] = priors
 
             self.reward_funcs[obj_tp] = RewardFunc(map_params, self.camera_params, self.rf_params)
+
+        # Save figures for drawing (one per belief)
+        self.figures = {}
+        for obj_tp in self.bel:
+            fig = plt.figure()
+            ax = fig.add_subplot(1,1,1)
+            plt.ion()
+            plt.show()
+            self.figures[obj_tp] = (fig, ax)
+
 
     def eval_reward(self, obstacle_map, root, node):
         reward = 0
@@ -102,3 +114,14 @@ class POMDP():
 
     def kl(self, p, q):
         return np.sum(np.where(p != 0, p*np.log(p/q), 0))
+
+    def visualize(self):
+        for obj_tp in self.figures:
+            visualization = self.bel[obj_tp].get_visualization()
+
+            self.figures[obj_tp][1].imshow(visualization, interpolation='nearest')
+
+        plt.draw()
+        plt.pause(0.001)
+
+        print(self.figures)

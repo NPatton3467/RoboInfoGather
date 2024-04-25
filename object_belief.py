@@ -104,3 +104,6 @@ class ObjTpBel():
             new_log_p = np.where(inv_sensor_model != 0, log_p + inv_sensor_model, log_p)
 
             self.feature_bels[feature] = 1 - (1/(1+np.exp(new_log_p)))
+
+    def get_visualization(self):
+        return np.mean(self.p, axis=2)
