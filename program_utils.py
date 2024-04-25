@@ -153,12 +153,13 @@ def gen_pomdp_from_query(query, pos, ori, trav_map_og_size, trav_map_og_res, con
 
                 prev_pomdp.reward_funcs[obj] = RewardFunc(map_params, prev_pomdp.camera_params, prev_pomdp.rf_params)
 
-                # Add figures
-                fig = plt.figure()
-                ax = fig.add_subplot(1,1,1)
-                plt.ion()
-                plt.show()
-                prev_pomdp.figures[obj] = (fig, ax)
+                if prev_pomdp.configs['bel_params']['visualize']:
+                    # Add figures
+                    fig = plt.figure()
+                    ax = fig.add_subplot(1,1,1)
+                    plt.ion()
+                    plt.show()
+                    prev_pomdp.figures[obj] = (fig, ax)
 
             else:
                 # Check for features

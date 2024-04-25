@@ -77,6 +77,7 @@ rf_params:
 bel_params:
   akld_hist_len: 100
   akld_stop: 0.01
+  visualize: false
 
 planner_params:
   max_time: 5.0

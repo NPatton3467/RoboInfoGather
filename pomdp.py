@@ -31,13 +31,14 @@ class POMDP():
             self.reward_funcs[obj_tp] = RewardFunc(map_params, self.camera_params, self.rf_params)
 
         # Save figures for drawing (one per belief)
-        self.figures = {}
-        for obj_tp in self.bel:
-            fig = plt.figure()
-            ax = fig.add_subplot(1,1,1)
-            plt.ion()
-            plt.show()
-            self.figures[obj_tp] = (fig, ax)
+        if self.configs['bel_params']['visualize']:
+            self.figures = {}
+            for obj_tp in self.bel:
+                fig = plt.figure()
+                ax = fig.add_subplot(1,1,1)
+                plt.ion()
+                plt.show()
+                self.figures[obj_tp] = (fig, ax)
 
 
     def eval_reward(self, obstacle_map, root, node):
