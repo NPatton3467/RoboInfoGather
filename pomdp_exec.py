@@ -13,8 +13,8 @@ from PIL import Image
 
 from omnigibson.object_states.pose import Pose
 
-from MCTS_planner import Action
-from observation_utils import *
+from RoboInfoGather.MCTS_planner import Action
+from RoboInfoGather.observation_utils import *
 
 
 def planned_action_to_real_action(act):

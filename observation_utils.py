@@ -9,6 +9,8 @@ from ram import inference_ram
 
 import torch
 
+from scipy.spatial.transform import Rotation as R
+
 # Setup global ram model
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 ram_checkpoint = 'C:\\Users\\warri\\OmniGibson\\RoboInfoGather\\pretrained\\ram_plus_swin_large_14m.pth'
@@ -18,32 +20,7 @@ ram_model.to(device)
 
 
 def quat_to_rot(quat):
-    q0 = quat[0]
-    q1 = quat[1]
-    q2 = quat[2]
-    q3 = quat[3]
-
-    # Row 1
-    r00 = 2 * (q0 * q0 + q1 * q1) - 1
-    r01 = 2 * (q1 * q2 - q0 * q3)
-    r02 = 2 * (q1 * q3 + q0 * q2)
-     
-    # Row 2
-    r10 = 2 * (q1 * q2 + q0 * q3)
-    r11 = 2 * (q0 * q0 + q2 * q2) - 1
-    r12 = 2 * (q2 * q3 - q0 * q1)
-     
-    # Row 3
-    r20 = 2 * (q1 * q3 - q0 * q2)
-    r21 = 2 * (q2 * q3 + q0 * q1)
-    r22 = 2 * (q0 * q0 + q3 * q3) - 1
-     
-    # 3x3 rotation matrix
-    rot_matrix = np.array([[r00, r01, r02],
-                           [r10, r11, r12],
-                           [r20, r21, r22]])
-                            
-    return rot_matrix
+    return R.from_quat(quat).as_matrix()
 
 
 def get_real_coords(x, y, camera_pos, camera_ori, depth_image, camera_intrinsic_mat, camera_rel_pos):
