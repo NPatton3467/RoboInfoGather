@@ -11,7 +11,17 @@ import copy
 from matplotlib import pyplot as plt
 
 def gen_prog_from_nl(nl):
-    assert False # Not complete
+    # TODO TEMPORARY
+    print("True where clause -- single object")
+    new_where = WhereClause(where_tp='true', obj_tp="cup")
+    print(new_where.pretty_str())
+
+    new_query = Query(obj_tp="cup", where_clause=new_where)
+
+    new_prog = Prog([new_query])
+
+    return new_prog
+    #assert False # Not complete
 
 def get_objects_and_features_helper(component):
     # Start with list and then unify

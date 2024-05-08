@@ -7,6 +7,8 @@ import numpy as np
 
 from enum import Enum
 
+from RoboInfoGather.map_utils import *
+
 class Loc():
     def __init__(self, x, y, theta=None):
         self.x = x
@@ -34,29 +36,23 @@ class Loc():
 """
 
 class Action(Enum):
-    M_FOWARD = 1
+    M_FORWARD = 1
     M_BACKWARD = 2
     R_CCW = 3
     R_CW = 4
     OBS = 5
 
 class MCTS_Tree_Node():
-    def __init__(self, loc, map_bounds, obstacle_map, num_prev_obs, max_obs,
-            map_g, parent=None, children=[], inbound_act=None, terminal=False):
+    def __init__(self, loc, obstacle_map, num_prev_obs, max_obs,
+            parent=None, children=[], inbound_act=None, terminal=False):
 
-
-        assert False # Need to consider how to check collisions -- use trav map
         
         self.loc = loc
-        self.map_bounds = map_bounds
 
         self.obstacle_map = obstacle_map
 
         self.num_prev_obs = num_prev_obs
         self.max_obs = max_obs
-
-        # Map Granularity
-        self.map_g = map_g
 
         self.children = children
         self.parent = parent
@@ -100,11 +96,9 @@ class MCTS_Tree_Node():
 
         child = MCTS_Tree_Node(
                 loc = new_loc,
-                map_bounds = self.map_bounds,
                 obstacle_map = self.obstacle_map,
                 num_prev_obs = new_num_prev_obs,
                 max_obs = self.max_obs,
-                map_g = self.map_g,
                 parent = self,
                 children = [],
                 inbound_act = act,
@@ -125,15 +119,15 @@ class MCTS_Tree_Node():
 
         xy = [new_loc.x, new_loc.y]
 
-        mxy = world_to_map(xy, self.obstacle_map.resolution, self.obstacle_map.grid_range)
+        mxy = world_to_map(xy, self.obstacle_map.resolution, self.obstacle_map.size)
 
         # Check that new location is within the map bounds
-        if mxy[0] < 0 or mxy[0] > self.map_params['size'] or\
-            mxy[1] < 0 or mxy[1] > self.map_params['size']:
+        if mxy[0] < 0 or mxy[0] > self.obstacle_map.size or\
+            mxy[1] < 0 or mxy[1] > self.obstacle_map.size:
             return False
         
         # Check if new location would cause a collision
-        if self.obstacle_map[mxy[0], mxy[1]] > 0:
+        if self.obstacle_map.obstacles[mxy[0], mxy[1]] > 0:
             return False
 
         return True
@@ -174,8 +168,6 @@ class MCTS_Tree_Node():
         elif act == Action.OBS:
             return Loc(self.loc.x, self.loc.y, self.loc.theta)"""
 
-        # TODO: Think about this?
-        assert False
 
         # Estimate location based on actions
         # Rotations are ~15 degrees
@@ -219,25 +211,23 @@ class MCTS_Planner():
     def __init__(self, 
             pomdp,
             obstacle_map,
-            max_time,
-            max_obs,
+            config,
             epsilon=1e-2,
             rollout_policy="Random",
             max_rollout_depth=300):
 
-        root_loc = Loc(pomdp.loc[0], pomdp.loc[1], pomdp.loc[2])
+        root_loc = Loc(pomdp.loc.x, pomdp.loc.y, pomdp.loc.theta)
 
-        with open('config.json', 'r') as f:
-            self.config = json.load(f)
-
-        self.root = MCTS_Tree_Node(root_loc, belief.map_bounds, obstacle_map, 0,
-                max_obs, map_g=self.config['rf_params']['map_granularity'])
+        self.config = config
+        self.max_obs = self.config['planner_params']['max_observations']
+        self.root = MCTS_Tree_Node(root_loc, obstacle_map, 0,
+                self.max_obs)
 
         self.pomdp = pomdp
 
         self.obstacle_map = obstacle_map
 
-        self.max_time = max_time
+        self.max_time = self.config['planner_params']['max_time']
         self.epsilon = epsilon
 
         self.rollout_policy_tp = rollout_policy
@@ -254,7 +244,6 @@ class MCTS_Planner():
         return self.best_child(self.root)
 
     def traverse(self, node):
-        print(len(node.children), node.max_children)
         while len(node.children) == node.max_children:
             node = self.best_ucb(node)
 
@@ -275,7 +264,7 @@ class MCTS_Planner():
         # Calculate reward for all object types
         reward = 0
         for obj_tp in self.pomdp.reward_funcs.keys():
-            reward += self.pomdp.reward_funcs[obj_tp].eval(self.belief, self.obstacle_map, self.root, node)
+            reward += self.pomdp.reward_funcs[obj_tp].eval(self.pomdp.bel[obj_tp], self.obstacle_map, self.root, node)
 
         return reward
 
@@ -298,11 +287,9 @@ class MCTS_Planner():
 
             child = MCTS_Tree_Node(
                     loc = new_loc,
-                    map_bounds = node.map_bounds,
                     obstacle_map = node.obstacle_map,
                     num_prev_obs = new_num_prev_obs,
                     max_obs = node.max_obs,
-                    map_g = node.map_g,
                     parent = node,
                     children = [],
                     inbound_act = act,

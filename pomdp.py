@@ -97,18 +97,24 @@ class POMDP():
         for obj_tp in self.bel.keys():
             for i in range(k):
                 for j in range(k):
-                    akld += kl(self.prior_beliefs[i][obj_tp].p, self.prior_beliefs[j][obj_tp].p)
+                    akld += self.kl(self.prior_beliefs[i][obj_tp].p, self.prior_beliefs[j][obj_tp].p)
 
-        akld = akld / (k * (k-1))
+        if k > 1:
+            akld = akld / (k * (k-1))
+        else:
+            akld = -1
 
         # Check if enough found in symbolic execution
         found_all_obj = True
-        num_found = len(self.query.execute(symbolic_info))
-        if num_found < self.bel[obj_tp].num:
-            found_all_obj = False
+        current_symbolic_query = self.query.execute(symbolic_info)
+        for obj_tp in self.bel.keys():
+            num_found = len(current_symbolic_query[obj_tp])
+            if num_found < self.bel[obj_tp].num or self.bel[obj_tp].num == -1:
+                found_all_obj = False
 
         # Check akld and num found
-        if akld <= self.configs['bel_params']['akld_stop'] or found_all_obj:
+        if (akld > 0 and akld <= self.configs['bel_params']['akld_stop']) or found_all_obj:
+            print("Done POMDP Execution -- AKLD: ", akld, " Num Found: ", num_found, " Required Number to Find: ", self.bel[obj_tp].num, " found_all_obj: ", found_all_obj)
             return True, symbolic_info
 
         return False, symbolic_info

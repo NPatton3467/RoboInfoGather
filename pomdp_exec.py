@@ -13,7 +13,7 @@ from PIL import Image
 
 from omnigibson.object_states.pose import Pose
 
-from RoboInfoGather.MCTS_planner import Action
+from RoboInfoGather.MCTS_planner import *
 from RoboInfoGather.observation_utils import *
 
 
@@ -47,10 +47,10 @@ def planned_action_to_real_action(act):
     if act == Action.OBS:
         return OrderedDict([('robot0', [0 , 0])])
 
-def MCTS_planner_exec(pomdp, configs):
+def MCTS_planner_exec(pomdp, obstacle_map, configs):
     # Instantiate new planner
     # Can't reuse old tree since info is probably not relevant anymore????
-    planner = MCTS_Planner(pomdp, configs['planner_params']['max_time'],  configs['planner_params']['max_observations'])
+    planner = MCTS_Planner(pomdp, obstacle_map, configs)
 
     best_next_node = planner.search()
 
@@ -58,11 +58,11 @@ def MCTS_planner_exec(pomdp, configs):
 
 def low_level_planner_exec(way_point, pos, ori, config):
     reached_way_point = False
-    angle = arccos(quat_to_rot(ori)[0][0])
+    angle = np.arccos(quat_to_rot(ori)[0][0])
 
     dist_to_waypoint = np.sqrt((way_point.x - pos[0])**2 + (way_point.y - pos[1])**2)
     if dist_to_waypoint < config['planner_params']['way_point_loc_acc']:
-        if (angle - way_point.theta) < config['planner_params']['way_point_angle_acc']:
+        if (angle - way_point.theta) < config['planner_params']['way_point_ang_acc']:
             reached_way_point = True
             action = OrderedDict([('robot0', [0 , 0])])
 
@@ -97,7 +97,7 @@ def low_level_planner_exec(way_point, pos, ori, config):
 
     return action, reached_way_point
 
-def pomdp_exec_loop(env, pomdp, obstacle_map, config):
+def pomdp_exec_loop(env, pomdp, obstacle_map, config, dino_model):
     """
     Main loop for pomdp_execution
     """
@@ -107,19 +107,32 @@ def pomdp_exec_loop(env, pomdp, obstacle_map, config):
 
     # Run until complete
     done, symbolic_info = pomdp.enough_info()
+    print("In POMDP Exec loop -- DONE?: ", done)
     while not done:
         # Get next action
         if reached_way_point or time_steps_since_MCTS > config['planner_params']['max_time_wo_replan']:
-            way_point = MCTS_planner_exec(pomdp, config)
+            print("Entering MCTS Planner")
+            way_point = MCTS_planner_exec(pomdp, obstacle_map, config)
             time_steps_since_MCTS = 0
 
         pos, ori = env.robots[0].get_position_orientation()
+
+        print("Entering Low Level Planner")
         action, reached_way_point = low_level_planner_exec(way_point, pos, ori, config)
         time_steps_since_MCTS += 1
         
+        print("Executing: ", action)
         state, _, _, _ = env.step(action)
 
         camera_pos, camera_ori = env.robots[0]._sensors['robot0:eyes_Camera_sensor'].get_position_orientation()
+
+        # Update Obstacle map 
+        lidar_sensor = env.robots[0]._sensors['robot0:scan_link_Lidar_sensor']
+        scan = state['robot0']['robot0:scan_link_Lidar_sensor_scan']
+
+        obstacle_map.update(lidar_sensor, scan)
+
+        obstacle_map.visualize()
 
         # Update POMDP
             # 1. Loop over all object types
@@ -133,16 +146,14 @@ def pomdp_exec_loop(env, pomdp, obstacle_map, config):
 
 
             # Do the same for each feature
-            for feature in pomdp.bel[obj_tp].relevant_features:
+            for feature in pomdp.bel[obj_tp].feature_bels.keys():
                 # Get predictions for all voxels based on observations
                 vox_preds = get_vox_preds(camera_pos, camera_ori, pomdp.bel[obj_tp], obj_tp, state['robot0'], dino_model, config, obstacle_map, feature)
-                pomdp.bel[obj_tp].update(vox_preds, feature)
+                pomdp.bel[obj_tp].update(vox_preds, feature=feature)
 
-        # Update Obstacle map 
-        lidar_sensor = env.robots[0]._sensors['robot0:scan_link_Lidar_sensor']
-        grid_preds = lidar_sensor.get_local_occupancy_grid(state['robot0']['robot0:scan_link_Lidar_sensor_scan'])
 
-        obstacle_map.update(grid_preds)
+            plt.imshow(pomdp.bel[obj_tp].get_visualization())
+            plt.show()
 
         # Check if Done
         done, symbolic_info = pomdp.enough_info()

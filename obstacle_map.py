@@ -27,12 +27,8 @@ class ObstacleMap():
         unit_vector_laser = np.array([[np.cos(ang), np.sin(ang), 0.0] for ang in angles])
         scan_laser = unit_vector_laser * (scan * (scan_sensor.max_range - scan_sensor.min_range) + scan_sensor.min_range)
         
-        print(scan_laser)
-
         pos, ori = scan_sensor.get_position_orientation()
         scan_world = quat_to_rot(ori).dot(scan_laser.T).T + pos
-
-        print(scan_world)
 
 
         scan_world = np.squeeze(scan_world)
@@ -51,9 +47,7 @@ class ObstacleMap():
 
                 # Doing something wrong here. Lidar is mounted 90 degrees from flat (scaning into z axis)
                 # My transforms ought to work here but they don't
-                # I will need to remove the ground plane and robot LIDAR self collisions from this as well
-                print("Updating Obstacles at:\n", xy_obstacle_map)
-            
+                # I will need to remove the ground plane and robot LIDAR self collisions from this as well            
                 p = self.obstacles[xy_obstacle_map[0], xy_obstacle_map[1]]
                 log_p = np.log((p+eps)/(1-p))
 

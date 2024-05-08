@@ -29,9 +29,9 @@ class RewardFunc():
         xy = [real_x, real_y]
         mxy = world_to_map(xy, self.map_params['res'], self.map_params['size'])
 
-        return rounded_x, rounded_y
+        return mxy[0], mxy[1]
 
-    def get_robot_fov(self, node):
+    def get_robot_fov(self, node, obstacle_map):
         min_angle = self.camera_params['min_angle']
         max_angle = self.camera_params['max_angle']
         min_v_dist = self.camera_params['min_visual_distance']
@@ -41,10 +41,10 @@ class RewardFunc():
         dist_delta = self.rf_params['dist_delta']
 
         angle = min_angle
-        dist = min_v_dist
 
         fov = []
         while angle < max_angle:
+            dist = min_v_dist
             while dist < max_v_dist:
                 # Get node that corresponds to angle and dist (relative to robot)
                 x, y = self.get_new_node(node.loc, dist, angle)
@@ -63,7 +63,7 @@ class RewardFunc():
                 # Can't see through obstacles so break
                 # TODO: Think about how to represent with different map
                 # granularities once LIDAR setup
-                if self.obstacle_map[x, y]:
+                if obstacle_map.obstacles[x, y]:
                     break
 
                 fov.append((x,y))
@@ -82,17 +82,16 @@ class RewardFunc():
             return 0
 
         # Get grid spaces within robots FOV
-        locs = self.get_robot_fov(node)
+        locs = self.get_robot_fov(node, obstacle_map)
 
         reward = 0.0
         for (x,y) in locs:
-            # TODO: Think about how to represent with different map granularities
-            # once LIDAR setup is done
-            assert False # Above
-            z_dim = int(self.config['rf_params']['map_height'] / self.map_params['res'])
+            z_dim = int(belief.configs['rf_params']['map_height'] / belief.map_params['res'])
 
             for z in range(z_dim):
-                p = belief[x, y, z]
+                bxy = world_to_map(map_to_world(np.array([x, y]), obstacle_map.resolution, obstacle_map.size), \
+                    belief.map_params['res'], belief.map_params['size'])
+                p = belief.p[bxy[0], bxy[1], z]
                 reward += p * np.log(p) + (1-p)*np.log(1-p)
 
         reward *= -1

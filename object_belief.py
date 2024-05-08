@@ -81,25 +81,29 @@ class ObjTpBel():
 
         print(f'Updating at Index = ({bx}, {by}, {bz}), with likelihood = {obs}')"""
 
-        if feauture is None:
+        if feature is None:
             # Update Belief using Binary Bayes Filter
             # CAN THIS BE DONE WITHOUT DOING EACH VOXEL INDIVIDUALLY? -- yes
             p = self.p
 
             log_p = np.log(p/(1-p))
 
-            inv_sensor_model = np.where(obs != 0, np.log((obs-eps)/(1-obs+eps)), 0)
+            print("p min/max", np.min(p), "/", np.max(p))
+            print("obs min/max", np.min(obs), "/", np.max(obs))
+
+            inv_sensor_model = np.where(obs != -1, np.log((obs+eps)/(1-obs+eps)), 0)
 
             new_log_p = np.where(inv_sensor_model != 0, log_p + inv_sensor_model, log_p)
 
             self.p = 1 - (1/(1+np.exp(new_log_p)))
         else:
+            print("Feature: ", feature)
             assert False # This needs to change to reflect aribitrary features (e.g. colour will have values of "red" here)
             p = self.feature_bels[feature]
 
             log_p = np.log(p/(1-p))
 
-            inv_sensor_model = np.where(obs != 0, np.log((obs-eps)/(1-obs+eps)), 0)
+            inv_sensor_model = np.where(obs != -1, np.log((obs+eps)/(1-obs+eps)), 0)
 
             new_log_p = np.where(inv_sensor_model != 0, log_p + inv_sensor_model, log_p)
 

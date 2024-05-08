@@ -2,22 +2,96 @@ import numpy as np
 import cv2
 from RoboInfoGather.map_utils import *
 from groundingdino.util.inference import predict
+import groundingdino.datasets.transforms as T
 from RoboInfoGather.MCTS_planner import Loc
 
 from ram.models import ram
-from ram import inference_ram
+from ram import inference_ram, inference_tag2text, inference_ram_openset
+from ram import get_transform
+
+from PIL import Image
 
 import torch
+import torchvision.transforms.functional as TF
 
 from scipy.spatial.transform import Rotation as R
 
 # Setup global ram model
-device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+ram_device = 'cpu' #torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 ram_checkpoint = 'C:\\Users\\warri\\OmniGibson\\RoboInfoGather\\pretrained\\ram_plus_swin_large_14m.pth'
-ram_model = ram(pretrained=ram_checkpoint, vit='large', image_size=384)
+ram_img_size = 384
+ram_model = ram(pretrained=ram_checkpoint, vit='large', image_size=ram_img_size)
 ram_model.eval()
-ram_model.to(device)
+ram_model.to(ram_device)
 
+def get_new_node(current_loc, dist, angle, belief):
+    # In robot frame: robot direction is X-axis.
+
+    # Find the X,Y locations of the point in robot frame 
+    # from distance and angle
+    new_x = np.cos(angle) * dist
+    new_y = np.sin(angle) * dist
+
+    # Do a rotation based on robot theta to get delta x,y in real coords
+    delta_x = new_x * np.cos(current_loc.theta) - new_y * np.sin(current_loc.theta)
+    delta_y = new_x * np.sin(current_loc.theta) + new_y * np.cos(current_loc.theta)
+
+    # Get actual x and y based off of current loc
+    real_x = current_loc.x + delta_x
+    real_y = current_loc.y + delta_y
+
+    # Get Map xy
+    xy = [real_x, real_y]
+    mxy = world_to_map(xy, belief.map_params['res'], belief.map_params['size'])
+
+    return mxy[0], mxy[1]
+
+
+def get_fov(current_location, config, camera_params, obstacle_map, belief):
+    min_angle = camera_params['min_angle']
+    max_angle = camera_params['max_angle']
+    min_v_dist = camera_params['min_visual_distance']
+    max_v_dist = camera_params['max_visual_distance']
+
+    angle_delta = config['rf_params']['angle_delta']
+    dist_delta = config['rf_params']['dist_delta']
+
+    angle = min_angle
+
+    fov = []
+    while angle < max_angle:
+        dist = min_v_dist
+        print(len(fov))
+        while dist < max_v_dist:
+            # Get node that corresponds to angle and dist (relative to robot)
+            x, y = get_new_node(current_location, dist, angle, belief)
+
+            # Skip if already added
+            if (x, y) in fov:
+                dist += dist_delta
+                continue
+
+            # Check that x,y are within map bounds
+            x_max = belief.map_params['size']
+            y_max = belief.map_params['size']
+            if x not in range(0, x_max) or y not in range(0, y_max):
+                break
+
+            # Can't see through obstacles so break
+            om_xy = world_to_map(map_to_world(np.array([x,y]), belief.map_params['res'], 
+                belief.map_params['size']), obstacle_map.resolution, obstacle_map.size)
+            if obstacle_map.obstacles[om_xy[0], om_xy[1]]:
+                break
+
+            fov.append((x,y))
+
+            # Increment distance
+            dist += dist_delta
+
+        # Increment angle
+        angle += angle_delta
+
+    return fov
 
 def quat_to_rot(quat):
     return R.from_quat(quat).as_matrix()
@@ -57,14 +131,24 @@ def get_real_coords(x, y, camera_pos, camera_ori, depth_image, camera_intrinsic_
 
 
 def obj_detection(dino_model, obj_tp, state, feature):
-    img = state['robot0:eyes_Camera_sensor_rgb']
+    img = np.array(state['robot0:eyes_Camera_sensor_rgb'])
+    #Image should be torch tensor
+    img = Image.fromarray(img).convert('RGB')
+    transform = T.Compose(
+        [
+            T.RandomResize([800], max_size=1333),
+            T.ToTensor(),
+            T.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225]),
+        ]
+    )
+    img, _ = transform(img, None)
 
     if feature is None:
         TEXT_PROMPT = f'{obj_tp}'
     else:
-        TEXT_PROMP = f'{obj_tp} with {feature}'
+        TEXT_PROMPT = f'{obj_tp} with {feature}'
 
-    BOX_THRESHOLD = 0.35
+    BOX_THRESHOLD = 0.5
     TEXT_THRESHOLD = 0.25
 
     boxes, logits, _ = predict(
@@ -75,7 +159,7 @@ def obj_detection(dino_model, obj_tp, state, feature):
         text_threshold=TEXT_THRESHOLD
     )
 
-    return np.stack(boxes, logits)
+    return boxes, logits
 
 
 def get_new_loc(current_loc, dist, angle, res, size):
@@ -98,13 +182,46 @@ def get_new_loc(current_loc, dist, angle, res, size):
         xy = [real_x, real_y]
         mxy = world_to_map(xy, res, size)
 
-        return rounded_x, rounded_y
+        return mxy[0], mxy[1]
 
 
 def get_all_object_detections(state, dino_model):
-    img = state['robot0:eyes_Camera_sensor_rgb']
+    img = np.array(state['robot0:eyes_Camera_sensor_rgb'])
+    #Image should be torch tensor
+    img = Image.fromarray(img).convert('RGB')
+    transform = get_transform(ram_img_size)
+    img = transform(img)
+    img = img.unsqueeze(0).to(ram_device)
         
-    TEXT_PROMP = inference_ram(img, ram_model)
+    TEXT_PROMPT = inference_ram_openset(img, ram_model)
+
+    print("START", TEXT_PROMPT, "END")
+    if TEXT_PROMPT == "" or TEXT_PROMPT == " ":
+        return [], []
+
+    TEXT_PROMPT_LIST = TEXT_PROMPT.split('|')
+    TEXT_PROMPT = ''
+    for i in range(len(TEXT_PROMPT_LIST)):
+        if i == len(TEXT_PROMPT_LIST) - 1:
+            TEXT_PROMPT += TEXT_PROMPT_LIST[i].strip(' ')
+        else:
+            TEXT_PROMPT += TEXT_PROMPT_LIST[i].strip(' ') + ", "
+
+    print(TEXT_PROMPT)
+
+
+    # Need to reform image for DINO
+    img = np.array(state['robot0:eyes_Camera_sensor_rgb'])
+    #Image should be torch tensor
+    img = Image.fromarray(img).convert('RGB')
+    transform = T.Compose(
+        [
+            T.RandomResize([800], max_size=1333),
+            T.ToTensor(),
+            T.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225]),
+        ]
+    )
+    img, _ = transform(img, None)
 
     BOX_THRESHOLD = 0.35
     TEXT_THRESHOLD = 0.25
@@ -117,7 +234,7 @@ def get_all_object_detections(state, dino_model):
         text_threshold=TEXT_THRESHOLD
     )
 
-    return np.stack(boxes, object_names)
+    return boxes, object_names
 
 
 def get_vlm_prediction(state, obj_tp, obj_tp2):
@@ -153,7 +270,7 @@ def get_vlm_prediction(state, obj_tp, obj_tp2):
 
 
 
-def predict_unlikely_occluded_voxels(camera_pos, camera_ori, obj_tp, state, config, obstacle_map, belief, ram_grounded_sam_model, feature=None):
+def predict_unlikely_occluded_voxels(camera_pos, camera_ori, obj_tp, state, config, obstacle_map, belief, dino_model, feature=None):
     """
     Function to get a set of voxels corresponding to occlusions in current image that are unlikely to contain an
     instance of the desired object type
@@ -202,9 +319,9 @@ def predict_unlikely_occluded_voxels(camera_pos, camera_ori, obj_tp, state, conf
                 break
 
             # Can't see through obstacles so break
-            o_map_xy = world_to_map(map_to_world([x, y], belief.map_params['res'], belief.map_params['size']),\
-                obstacle_map.resolution, obstacle_map.grid_size)
-            if obstacle_map[o_map_xy[0], o_map_xy[1]] > 0:
+            o_map_xy = world_to_map(map_to_world(np.array([x, y]), belief.map_params['res'], belief.map_params['size']),\
+                obstacle_map.resolution, obstacle_map.size)
+            if obstacle_map.obstacles[o_map_xy[0], o_map_xy[1]] > 0:
                 found_occlusion_in_current_angle = True
                 # Check if current angle is in occluded voxels
                 if angle in occluded_voxels:
@@ -266,7 +383,7 @@ def predict_unlikely_occluded_voxels(camera_pos, camera_ori, obj_tp, state, conf
     # Now need to reason about probability of existence behind occlusions
 
     # First get all object predictions
-    objects = get_all_object_detections(state, ram_grounded_sam_model)
+    boxes, obj_names = get_all_object_detections(state, dino_model)
 
 
     # For each group in the occluded voxels, project into image space and find object that is causing occlusion
@@ -291,7 +408,9 @@ def predict_unlikely_occluded_voxels(camera_pos, camera_ori, obj_tp, state, conf
             # Check if point within bbox
             correct_bbox = None
             correct_name = ""
-            for bbox, name in bboxes:
+            for i in range(boxes):
+                bbox = boxes[i]
+                name = obj_names[1]
                 # Grounding Dino format is cxcywh
                 assert False # Check that this is the same for RAM GROUNDING DINO
                 
@@ -336,13 +455,24 @@ def get_vox_preds(camera_pos, camera_ori, belief, obj_tp, state, dino_model, con
     predicted value of object existence.
     """
 
-    voxel_preds = np.zeros_like(belief)
+    voxel_preds = np.ones_like(belief.p)
+    voxel_preds *= -1
+    
+    # Make 0 in all visible voxels
+    camera_angle_mat = quat_to_rot(camera_ori)
+    loc = Loc(camera_pos[0], camera_pos[1], np.arccos(camera_angle_mat[0][0]))
+    fov = get_fov(loc, config, config['camera_params'], obstacle_map, belief)
+    for x, y in fov:
+        voxel_preds[x, y] = 0
+
 
     # Get the set object bounding boxes and confidence scores for object types/features from state
-    detected_objects = obj_detection(dino_model, obj_tp, state, feature)
+    boxes, logits = obj_detection(dino_model, obj_tp, state, feature)
 
     # Get the corresponding voxels
-    for bbox, score in detected_objects:
+    for i in range(len(boxes)):
+        bbox = boxes[i]
+        score = np.exp(logits[i])
         # Get bounding box center 
         # Grounding Dino format is cxcywh
         cx = bbox[0]
@@ -365,10 +495,8 @@ def get_vox_preds(camera_pos, camera_ori, belief, obj_tp, state, dino_model, con
         voxel_preds[vx, vy, vz] = score
 
 
-
-
     # Predict score for occluded regions
-    low_likelihood_voxels = predict_unlikely_occluded_voxels(camera_pos, camera_ori, obj_tp, state, config, belief, obstacle_map, feature)
+    low_likelihood_voxels = predict_unlikely_occluded_voxels(camera_pos, camera_ori, obj_tp, state, config, obstacle_map, belief, dino_model, feature)
 
     for vox in low_likelihood_voxels:
         # Loop throught z-dim
