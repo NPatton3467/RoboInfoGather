@@ -124,11 +124,12 @@ def pomdp_exec_loop(env, pomdp, obstacle_map, config, dino_model):
         print("Executing: ", action)
         state, _, _, _ = env.step(action)
 
-        camera_pos, camera_ori = env.robots[0]._sensors['robot0:eyes_Camera_sensor'].get_position_orientation()
+        camera_pos, camera_ori = env.robots[0]._sensors['robot0:eyes:Camera:0'].get_position_orientation()
 
         # Update Obstacle map 
-        lidar_sensor = env.robots[0]._sensors['robot0:scan_link_Lidar_sensor']
-        scan = state['robot0']['robot0:scan_link_Lidar_sensor_scan']
+        lidar_sensor = env.robots[0]._sensors['robot0:scan_link:Lidar:0']
+        print(state['robot0'].keys())
+        scan = state['robot0']['robot0:scan_link:Lidar:0']['scan']
 
         obstacle_map.update(lidar_sensor, scan)
 

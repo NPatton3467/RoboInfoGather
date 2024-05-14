@@ -17,8 +17,8 @@ import torchvision.transforms.functional as TF
 from scipy.spatial.transform import Rotation as R
 
 # Setup global ram model
-ram_device = 'cpu' #torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-ram_checkpoint = 'C:\\Users\\warri\\OmniGibson\\RoboInfoGather\\pretrained\\ram_plus_swin_large_14m.pth'
+ram_device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+ram_checkpoint = '/robodata/user_data/npatt/OmniGibson/RoboInfoGather/pretrained/ram_plus_swin_large_14m.pth'
 ram_img_size = 384
 ram_model = ram(pretrained=ram_checkpoint, vit='large', image_size=ram_img_size)
 ram_model.eval()
@@ -131,7 +131,7 @@ def get_real_coords(x, y, camera_pos, camera_ori, depth_image, camera_intrinsic_
 
 
 def obj_detection(dino_model, obj_tp, state, feature):
-    img = np.array(state['robot0:eyes_Camera_sensor_rgb'])
+    img = np.array(state['robot0:eyes:Camera:0']['rgb'])
     #Image should be torch tensor
     img = Image.fromarray(img).convert('RGB')
     transform = T.Compose(
@@ -186,7 +186,7 @@ def get_new_loc(current_loc, dist, angle, res, size):
 
 
 def get_all_object_detections(state, dino_model):
-    img = np.array(state['robot0:eyes_Camera_sensor_rgb'])
+    img = np.array(state['robot0:eyes:Camera:0']['rgb'])
     #Image should be torch tensor
     img = Image.fromarray(img).convert('RGB')
     transform = get_transform(ram_img_size)
@@ -211,7 +211,7 @@ def get_all_object_detections(state, dino_model):
 
 
     # Need to reform image for DINO
-    img = np.array(state['robot0:eyes_Camera_sensor_rgb'])
+    img = np.array(state['robot0:eyes:Camera:0']['rgb'])
     #Image should be torch tensor
     img = Image.fromarray(img).convert('RGB')
     transform = T.Compose(
@@ -250,7 +250,7 @@ def get_vlm_prediction(state, obj_tp, obj_tp2):
             "role": "user",
             "content": [
                 f"{prompt}",
-                *map({"image": state['robot0:eyes_Camera_sensor'], "resize": 128}, base64Frames[1000:1500:20]),
+                *map({"image": state['robot0:eyes:Camera:0']['rgb'], "resize": 128}, base64Frames[1000:1500:20]),
             ],
         },
     ]
@@ -479,7 +479,7 @@ def get_vox_preds(camera_pos, camera_ori, belief, obj_tp, state, dino_model, con
         cy = bbox[1]
 
         # Get xyz coordinates from image and depth
-        x, y, z = get_real_coords(cx, cy, camera_pos, camera_ori, state['robot0:eyes_Camera_sensor_depth'], camera_intrinsic_mat, camera_rel_pos)
+        x, y, z = get_real_coords(cx, cy, camera_pos, camera_ori, state['robot0:eyes:Camera:0']['depth'], camera_intrinsic_mat, camera_rel_pos)
 
         # Translate to map coords and add to prediction
         xy = [x, y]

@@ -61,15 +61,15 @@ def main(nl):
 
     trav_map = np.array(trav_map)
     trav_map[:, 0] = 128
-    print(trav_map)
     plt.imshow(trav_map)
     plt.show()
 
     # Change lidar mounting
     _, rob_ori = env.robots[0].get_position_orientation()
-    cur_scan_pos, _ =env.robots[0]._sensors['robot0:scan_link_Lidar_sensor'].get_position_orientation()
+    print(env.robots[0]._sensors.keys())
+    cur_scan_pos, _ =env.robots[0]._sensors['robot0:scan_link:Lidar:0'].get_position_orientation()
     cur_scan_pos[2] += 0.1
-    env.robots[0]._sensors['robot0:scan_link_Lidar_sensor'].set_position_orientation(cur_scan_pos, rob_ori)
+    env.robots[0]._sensors['robot0:scan_link:Lidar:0'].set_position_orientation(cur_scan_pos, rob_ori)
 
     size, _ = trav_map.shape
     obstacle_map = ObstacleMap(resolution, size)
@@ -94,7 +94,7 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser('info_gather_main')
     parser.add_argument('nl_query', type=str)
 
-    args = parser.parse_args()
+    args, _ = parser.parse_known_args()
 
     nl = args.nl_query
 

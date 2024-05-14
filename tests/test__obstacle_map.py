@@ -40,9 +40,9 @@ plt.show()
 
 # Change lidar mounting
 _, rob_ori = env.robots[0].get_position_orientation()
-cur_scan_pos, _ =env.robots[0]._sensors['robot0:scan_link_Lidar_sensor'].get_position_orientation()
+cur_scan_pos, _ =env.robots[0]._sensors['robot0:scan_link:Lidar:0'].get_position_orientation()
 cur_scan_pos[2] += 0.1
-env.robots[0]._sensors['robot0:scan_link_Lidar_sensor'].set_position_orientation(cur_scan_pos, rob_ori)
+env.robots[0]._sensors['robot0:scan_link:Lidar:0'].set_position_orientation(cur_scan_pos, rob_ori)
 
 size, _ = trav_map.shape
 obstacle_map = ObstacleMap(resolution, size)
@@ -57,7 +57,7 @@ for j in range(max_iterations):
     for i in range(1000):
         state, reward, done, info = env.step(action)
         # Update Obstacle map 
-        lidar_sensor = env.robots[0]._sensors['robot0:scan_link_Lidar_sensor']
+        lidar_sensor = env.robots[0]._sensors['robot0:scan_link:Lidar:0']
         scan = state['robot0']['robot0:scan_link_Lidar_sensor_scan']
 
         obstacle_map.update(lidar_sensor, scan)
