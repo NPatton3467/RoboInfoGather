@@ -463,7 +463,17 @@ def get_vox_preds(camera_pos, camera_ori, belief, obj_tp, state, dino_model, con
     loc = Loc(camera_pos[0], camera_pos[1], np.arccos(camera_angle_mat[0][0]))
     fov = get_fov(loc, config, config['camera_params'], obstacle_map, belief)
     for x, y in fov:
-        voxel_preds[x, y] = 0
+        # Translate to map coords and add to prediction
+        xy = [x, y]
+        map_resolution = belief.map_params['res']
+        map_size = belief.map_params['size']
+        vxy = world_to_map(xy, map_resolution, map_size)
+
+        vx = vxy[0]
+        vy = vxy[1]
+        for vz in range(int(belief.z_dim/map_resolution)):
+            # Put score in prediction output
+            voxel_preds[vx, vy, vz] = 0
 
 
     # Get the set object bounding boxes and confidence scores for object types/features from state
@@ -501,8 +511,14 @@ def get_vox_preds(camera_pos, camera_ori, belief, obj_tp, state, dino_model, con
     for vox in low_likelihood_voxels:
         # Loop throught z-dim
         for z in range(belief.z_dim):
+            # Use Correct coordinates
+            vxy = world_to_map(vox, map_resolution, map_size)
+
+            vx = vxy[0]
+            vy = vxy[1]
+
             # Make sure we're not contradiction previous observation scores
-            if voxel_preds[vox[0], vox[1], z] == 0:
-                voxel_preds[vox[0], vox[1], z] = config['observation_calc_params']['dne_occluded_prob']
+            if voxel_preds[vx, vy, z] == 0:
+                voxel_preds[vx, vy, z] = config['observation_calc_params']['dne_occluded_prob']
 
     return voxel_preds
