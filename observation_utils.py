@@ -41,10 +41,7 @@ def get_new_node(current_loc, dist, angle, belief):
     real_y = current_loc.y + delta_y
 
     # Get Map xy
-    xy = [real_x, real_y]
-    mxy = world_to_map(xy, belief.map_params['res'], belief.map_params['size'])
-
-    return mxy[0], mxy[1]
+    return real_x, real_y
 
 
 def get_fov(current_location, config, camera_params, obstacle_map, belief):
@@ -74,12 +71,12 @@ def get_fov(current_location, config, camera_params, obstacle_map, belief):
             # Check that x,y are within map bounds
             x_max = belief.map_params['size']
             y_max = belief.map_params['size']
-            if x not in range(0, x_max) or y not in range(0, y_max):
+            b_xy = world_to_map(np.array([x,y]), belief.map_params['res'], belief.map_params['size'])
+            if b_xy[0] not in range(0, x_max) or b_xy[1] not in range(0, y_max):
                 break
 
             # Can't see through obstacles so break
-            om_xy = world_to_map(map_to_world(np.array([x,y]), belief.map_params['res'], 
-                belief.map_params['size']), obstacle_map.resolution, obstacle_map.size)
+            om_xy = world_to_map(np.array([x,y]), obstacle_map.resolution, obstacle_map.size)
             if obstacle_map.obstacles[om_xy[0], om_xy[1]]:
                 break
 
@@ -179,10 +176,7 @@ def get_new_loc(current_loc, dist, angle, res, size):
         real_y = current_loc.y + delta_y
 
         # Get Map xy
-        xy = [real_x, real_y]
-        mxy = world_to_map(xy, res, size)
-
-        return mxy[0], mxy[1]
+        return real_x, real_y
 
 
 def get_all_object_detections(state, dino_model):
@@ -300,7 +294,7 @@ def predict_unlikely_occluded_voxels(camera_pos, camera_ori, obj_tp, state, conf
     dist = min_v_dist
 
     camera_angle_mat = quat_to_rot(camera_ori)
-    loc = Loc(camera_pos[0], camera_pos[1], np.arccos(camera_angle_mat[0][0]))
+    loc = Loc(camera_pos[0], camera_pos[1], np.arccos(camera_angle_mat[0][0]) - np.deg2rad(90))
 
     occluded_voxels = {}
     appending_to_group = False
@@ -311,16 +305,15 @@ def predict_unlikely_occluded_voxels(camera_pos, camera_ori, obj_tp, state, conf
         while dist < max_v_dist:
             # Get node that corresponds to angle and dist (relative to robot)
             x, y = get_new_loc(loc, dist, angle, belief.map_params['res'], belief.map_params['size'])
+            o_map_xy = world_to_map(np.array([x, y]), obstacle_map.resolution, obstacle_map.size)
 
             # Check that x,y are within map bounds
             x_max = belief.map_params['size']
             y_max = belief.map_params['size']
-            if x not in range(0, x_max) or y not in range(0, y_max):
+            if o_map_xy[0] not in range(0, x_max) or o_map_xy[1] not in range(0, y_max):
                 break
 
             # Can't see through obstacles so break
-            o_map_xy = world_to_map(map_to_world(np.array([x, y]), belief.map_params['res'], belief.map_params['size']),\
-                obstacle_map.resolution, obstacle_map.size)
             if obstacle_map.obstacles[o_map_xy[0], o_map_xy[1]] > 0:
                 found_occlusion_in_current_angle = True
                 # Check if current angle is in occluded voxels
@@ -460,12 +453,14 @@ def get_vox_preds(camera_pos, camera_ori, belief, obj_tp, state, dino_model, con
     
     # Make 0 in all visible voxels
     camera_angle_mat = quat_to_rot(camera_ori)
-    loc = Loc(camera_pos[0], camera_pos[1], np.arccos(camera_angle_mat[0][0]))
+    loc = Loc(camera_pos[0], camera_pos[1], np.arccos(camera_angle_mat[0][0]) - np.deg2rad(90))
+    print("Camera Angle", np.arccos(camera_angle_mat[0][0]) - np.deg2rad(90))
     fov = get_fov(loc, config, config['camera_params'], obstacle_map, belief)
     for x, y in fov:
+        vxy = world_to_map(np.array([x, y]), map_resolution=belief.map_params['res'], map_size=belief.map_params['size'])
         for z in range(belief.z_dim):
             # Set 0 for whole z_dim
-            voxel_preds[x, y, z] = 0
+            voxel_preds[vxy[0], vxy[1], z] = 0
 
 
     # Get the set object bounding boxes and confidence scores for object types/features from state
@@ -504,7 +499,8 @@ def get_vox_preds(camera_pos, camera_ori, belief, obj_tp, state, dino_model, con
         # Loop throught z-dim
         for z in range(belief.z_dim):
             # Make sure we're not contradiction previous observation scores
-            if voxel_preds[vox[0], vox[1], z] == 0:
-                voxel_preds[vox[0], vox[1], z] = config['observation_calc_params']['dne_occluded_prob']
+            vxy = world_to_map(np.array([vox[0], vox[1]], map_resolution=belief.map_params['res'], map_size=belief.map_params['size']))
+            if voxel_preds[vxy[0], vxy[1], z] == 0:
+                voxel_preds[vxy[0], vxy[1], z] = config['observation_calc_params']['dne_occluded_prob']
 
     return voxel_preds

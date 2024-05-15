@@ -83,7 +83,7 @@ planner_params:
   max_time: 5.0
   max_observations: 1
   max_time_wo_replan: 100
-  way_point_loc_acc: 0.15
+  way_point_loc_acc: 0.05
   way_point_ang_acc: 0.09
   way_point_direction_angle: 0.04
 
