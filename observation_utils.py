@@ -464,7 +464,7 @@ def get_vox_preds(camera_pos, camera_ori, belief, obj_tp, state, dino_model, con
     fov = get_fov(loc, config, config['camera_params'], obstacle_map, belief)
     for x, y in fov:
         for z in range(belief.z_dim):
-            # Put score in prediction output
+            # Set 0 for whole z_dim
             voxel_preds[x, y, z] = 0
 
 
