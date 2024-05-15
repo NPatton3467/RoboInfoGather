@@ -26,10 +26,7 @@ class RewardFunc():
         real_y = current_loc.y + delta_y
 
         # Get Map xy
-        xy = [real_x, real_y]
-        mxy = world_to_map(xy, self.map_params['res'], self.map_params['size'])
-
-        return mxy[0], mxy[1]
+        return real_x, real_y
 
     def get_robot_fov(self, node, obstacle_map):
         min_angle = self.camera_params['min_angle']
@@ -55,15 +52,18 @@ class RewardFunc():
                     continue
 
                 # Check that x,y are within map bounds
-                x_max = self.map_params['size']
-                y_max = self.map_params['size']
-                if x not in range(0, x_max) or y not in range(0, y_max):
+                res = obstacle_map.resolution
+                size = obstacle_map.size
+                x_max = size
+                y_max = size
+                mxy = world_to_map(np.array([x, y]), map_resolution=res, map_size=size)
+                if mxy[0] not in range(0, x_max) or mxy[1] not in range(0, y_max):
                     break
 
                 # Can't see through obstacles so break
                 # TODO: Think about how to represent with different map
                 # granularities once LIDAR setup
-                if obstacle_map.obstacles[x, y]:
+                if obstacle_map.obstacles[mxy[0], mxy[1]]:
                     break
 
                 fov.append((x,y))
@@ -85,24 +85,29 @@ class RewardFunc():
         locs = self.get_robot_fov(node, obstacle_map)
 
         reward = 0.0
+        x_max = belief.map_params['size']
+        y_max = belief.map_params['size']
         for (x,y) in locs:
-            z_dim = int(belief.configs['rf_params']['map_height'] / belief.map_params['res'])
+            bxy = world_to_map(np.array([x, y]), belief.map_params['res'], belief.map_params['size'])
 
-            for z in range(z_dim):
-                bxy = world_to_map(map_to_world(np.array([x, y]), obstacle_map.resolution, obstacle_map.size), \
-                    belief.map_params['res'], belief.map_params['size'])
+            # Skip if bordeline out of range
+            if bxy[0] not in range(0, x_max) or bxy[1] not in range(0, y_max):
+                continue
+
+            for z in range(belief.z_dim):
                 p = belief.p[bxy[0], bxy[1], z]
-                reward += p * np.log(p) + (1-p)*np.log(1-p)
+                if p > 0.0 and p < 1.0:
+                    reward += p * np.log(p) + (1-p)*np.log(1-p)
 
         reward *= -1
 
         # Add distance to get observation
-        root_x = root.loc.x
-        root_y = root.loc.y
+        # root_x = root.loc.x
+        # root_y = root.loc.y
 
-        node_x = node.loc.x
-        node_y = node.loc.y
+        # node_x = node.loc.x
+        # node_y = node.loc.y
 
-        dist = np.sqrt((node_x-root_x)**2 + (node_y-root_y)**2)
+        # dist = np.sqrt((node_x-root_x)**2 + (node_y-root_y)**2)
 
         return reward

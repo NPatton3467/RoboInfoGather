@@ -36,11 +36,11 @@ class Loc():
 """
 
 class Action(Enum):
-    M_FORWARD = 1
-    M_BACKWARD = 2
-    R_CCW = 3
-    R_CW = 4
-    OBS = 5
+    M_FORWARD = 0
+    M_BACKWARD = 1
+    R_CCW = 2
+    R_CW = 3
+    OBS = 4
 
 class MCTS_Tree_Node():
     def __init__(self, loc, obstacle_map, num_prev_obs, max_obs,
@@ -66,9 +66,10 @@ class MCTS_Tree_Node():
 
         # Find number of illegal actions and subtract from max children
         # Robot Must Start on Map Legally****
-        for action in Action:
-            if not self.legal(action):
+        for act in Action:
+            if not self.legal(act):
                 self.max_children -= 1
+
 
     def unvisited_child(self):
         avail_act_list = []
@@ -83,7 +84,7 @@ class MCTS_Tree_Node():
                 avail_act_list.append(act)
 
         # Randomly select from available actions
-        action = random.choice(avail_act_list)
+        act = random.choice(avail_act_list)
 
         # Make new node
         new_loc = self.get_loc(act)
@@ -122,8 +123,8 @@ class MCTS_Tree_Node():
         mxy = world_to_map(xy, self.obstacle_map.resolution, self.obstacle_map.size)
 
         # Check that new location is within the map bounds
-        if mxy[0] < 0 or mxy[0] > self.obstacle_map.size or\
-            mxy[1] < 0 or mxy[1] > self.obstacle_map.size:
+        if mxy[0] < 0 or mxy[0] >= self.obstacle_map.size or\
+            mxy[1] < 0 or mxy[1] >= self.obstacle_map.size:
             return False
         
         # Check if new location would cause a collision
@@ -174,7 +175,7 @@ class MCTS_Tree_Node():
         # Motition is 0.5m
 
         step_deg = 15
-        step_len = 0.5
+        step_len = 0.15
 
         # CCW Rotation
         if act == Action.R_CCW:
@@ -209,14 +210,16 @@ class MCTS_Tree_Node():
 
 class MCTS_Planner():
     def __init__(self, 
+            start,
             pomdp,
             obstacle_map,
             config,
-            epsilon=1e-2,
+            epsilon=1e-1,
             rollout_policy="Random",
             max_rollout_depth=300):
 
-        root_loc = Loc(pomdp.loc.x, pomdp.loc.y, pomdp.loc.theta)
+        root_loc = Loc(start.x, start.y, start.theta)
+        print("Belief Mean: ", np.mean(pomdp.bel['cup'].p))
 
         self.config = config
         self.max_obs = self.config['planner_params']['max_observations']
@@ -240,6 +243,11 @@ class MCTS_Planner():
             leaf = self.traverse(self.root)
             sim_reward = self.rollout(leaf)
             self.backpropogate(leaf, sim_reward)
+
+        print("Returning from Planner")
+        print("Num Root Children: ", len(self.root.children))
+        for child in self.root.children:
+            print("Child Act: ", child.inbound_act, " Reward: ", child.total_rewards, " Visits: ", child.visits)
 
         return self.best_child(self.root)
 
@@ -273,7 +281,7 @@ class MCTS_Planner():
             # Select random action until legal discovered
             legal = False
             while not legal:
-                act = random.choice(Action)
+                act = random.choice(list(Action))
                 legal = node.legal(act)
 
             # Make new child

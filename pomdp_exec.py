@@ -47,12 +47,16 @@ def planned_action_to_real_action(act):
     if act == Action.OBS:
         return OrderedDict([('robot0', [0 , 0])])
 
-def MCTS_planner_exec(pomdp, obstacle_map, configs):
+def MCTS_planner_exec(pomdp, obstacle_map, configs, pos, ori):
     # Instantiate new planner
     # Can't reuse old tree since info is probably not relevant anymore????
-    planner = MCTS_Planner(pomdp, obstacle_map, configs)
+    start = Loc(pos[0], pos[1], np.arccos(quat_to_rot(ori)[0][0]))
+    planner = MCTS_Planner(start, pomdp, obstacle_map, configs)
 
     best_next_node = planner.search()
+
+    print("MCTS Action: ", best_next_node.inbound_act)
+    print("MCTS Total Reward/Vists: ", best_next_node.total_rewards, best_next_node.visits)
 
     return best_next_node.loc
 
@@ -109,15 +113,16 @@ def pomdp_exec_loop(env, pomdp, obstacle_map, config, dino_model):
     done, symbolic_info = pomdp.enough_info()
     print("In POMDP Exec loop -- DONE?: ", done)
     while not done:
+        pos, ori = env.robots[0].get_position_orientation()
+        print("Robot Angle: ", np.arccos(quat_to_rot(ori)[0][0]))
+
         # Get next action
         if reached_way_point or time_steps_since_MCTS > config['planner_params']['max_time_wo_replan']:
             print("Entering MCTS Planner")
-            way_point = MCTS_planner_exec(pomdp, obstacle_map, config)
+            way_point = MCTS_planner_exec(pomdp, obstacle_map, config, pos, ori)
             time_steps_since_MCTS = 0
 
-        pos, ori = env.robots[0].get_position_orientation()
-
-        print("Entering Low Level Planner")
+        print("Entering Low Level Planner, Waypoint: ", way_point.x, way_point.y)
         action, reached_way_point = low_level_planner_exec(way_point, pos, ori, config)
         time_steps_since_MCTS += 1
         
