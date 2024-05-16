@@ -77,8 +77,9 @@ def main(nl):
     # Execute each query
     query_results = []
     for query in prog.expressions:
-        pos, ori = env.robots[0].get_position_orientation()
-        pomdp = gen_pomdp_from_query(query=query, pos=pos, ori=ori, trav_map_og_size=size, trav_map_og_res=resolution, configs=config)
+        pos = env.robots[0].get_position()
+        yaw = env.robots[0].get_rpy()[2]
+        pomdp = gen_pomdp_from_query(query=query, pos=pos, yaw=yaw, trav_map_og_size=size, trav_map_og_res=resolution, configs=config)
 
         symbolic_info = pomdp_exec_loop(env, pomdp, obstacle_map, config, dino_model)
 

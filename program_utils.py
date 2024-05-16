@@ -97,7 +97,7 @@ def get_objects_and_features(query):
 
     return obj_feat_dict
 
-def gen_pomdp_from_query(query, pos, ori, trav_map_og_size, trav_map_og_res, configs, prev_pomdp=None, gen_inform_priors=None):
+def gen_pomdp_from_query(query, pos, yaw, trav_map_og_size, trav_map_og_res, configs, prev_pomdp=None, gen_inform_priors=None):
     # Recurse on cases where "query" is aggregator, map, primitives, getnth, or count
     if type(query) is Map:
         # Add map feature to where clause for feature extraction
@@ -108,19 +108,19 @@ def gen_pomdp_from_query(query, pos, ori, trav_map_og_size, trav_map_og_res, con
             temp_where = WhereClause(where_tp=query.map_tp, obj_tp=query.obj_tp, enum_feature=query.map_feature)
         temp_where_and = WhereClause(where_tp='and', obj_tp=query.obj_tp, sub_where_clause=[temp_where, query_to_send.where_clause])
         query_to_send.where_clause = temp_where_and
-        return gen_pomdp_from_query(query_to_send, pos, ori, trav_map_og_size, trav_map_og_res, configs, prev_pomdp, gen_inform_priors)
+        return gen_pomdp_from_query(query_to_send, pos, yaw, trav_map_og_size, trav_map_og_res, configs, prev_pomdp, gen_inform_priors)
     if type(query) is Primitives:
         # Need to combine pomdps for both prim sides
-        new_pomdp = gen_pomdp_from_query(query.prim, pos, ori, trav_map_og_size, trav_map_og_res, configs, prev_pomdp, gen_inform_priors)
-        return gen_pomdp_from_query(query.prim2, pos, ori, trav_map_og_size, trav_map_og_res, configs, new_pomdp, gen_inform_priors)
+        new_pomdp = gen_pomdp_from_query(query.prim, pos, yaw, trav_map_og_size, trav_map_og_res, configs, prev_pomdp, gen_inform_priors)
+        return gen_pomdp_from_query(query.prim2, pos, yaw, trav_map_og_size, trav_map_og_res, configs, new_pomdp, gen_inform_priors)
     if type(query) is GetNth:
-        return gen_pomdp_from_query(query.list, pos, ori, trav_map_og_size, trav_map_og_res, configs, prev_pomdp, gen_inform_priors)
+        return gen_pomdp_from_query(query.list, pos, yaw, trav_map_og_size, trav_map_og_res, configs, prev_pomdp, gen_inform_priors)
     if type(query) is Count:
-        return gen_pomdp_from_query(query.query, pos, ori, trav_map_og_size, trav_map_og_res, configs, prev_pomdp, gen_inform_priors)
+        return gen_pomdp_from_query(query.query, pos, yaw, trav_map_og_size, trav_map_og_res, configs, prev_pomdp, gen_inform_priors)
     if type(query) is Aggregator:
-        return gen_pomdp_from_query(query.list, pos, ori, trav_map_og_size, trav_map_og_res, configs, prev_pomdp, gen_inform_priors)
+        return gen_pomdp_from_query(query.list, pos, yaw, trav_map_og_size, trav_map_og_res, configs, prev_pomdp, gen_inform_priors)
 
-    theta = np.arccos(quat_to_rot(ori)[0][0])
+    theta = yaw 
     robot_init_loc = Loc(pos[0], pos[1], theta)
 
     if prev_pomdp == None:

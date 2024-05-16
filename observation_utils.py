@@ -94,7 +94,7 @@ def quat_to_rot(quat):
     return R.from_quat(quat).as_matrix()
 
 
-def get_real_coords(x, y, camera_pos, camera_ori, depth_image, camera_intrinsic_mat, camera_rel_pos):
+def get_real_coords(x, y, camera_pos, camera_ori, depth_image, camera_intrinsic_mat):
     """
     This function uses the depth camera pixel values, camera intrinsic matrix, and camera position
     to translate pixel values to real world cooridnates
@@ -264,7 +264,7 @@ def get_vlm_prediction(state, obj_tp, obj_tp2):
 
 
 
-def predict_unlikely_occluded_voxels(camera_pos, camera_ori, obj_tp, state, config, obstacle_map, belief, dino_model, feature=None):
+def predict_unlikely_occluded_voxels(camera_pos, camera_rpy, obj_tp, state, config, obstacle_map, belief, dino_model, feature=None):
     """
     Function to get a set of voxels corresponding to occlusions in current image that are unlikely to contain an
     instance of the desired object type
@@ -293,8 +293,7 @@ def predict_unlikely_occluded_voxels(camera_pos, camera_ori, obj_tp, state, conf
     angle = min_angle
     dist = min_v_dist
 
-    camera_angle_mat = quat_to_rot(camera_ori)
-    loc = Loc(camera_pos[0], camera_pos[1], np.arccos(camera_angle_mat[0][0]) - np.deg2rad(90))
+    loc = Loc(camera_pos[0], camera_pos[1], camera_rpy[2])
 
     occluded_voxels = {}
     appending_to_group = False
@@ -436,7 +435,7 @@ def predict_unlikely_occluded_voxels(camera_pos, camera_ori, obj_tp, state, conf
 
 
 
-def get_vox_preds(camera_pos, camera_ori, belief, obj_tp, state, dino_model, config, obstacle_map, feature=None):
+def get_vox_preds(camera_pos, camera_ori, camera_rpy, belief, obj_tp, state, dino_model, config, obstacle_map, camera_intrinsic_mat, feature=None):
     """
     Function to get predicted value of existence at each voxel (for an object type) 
     give observation
@@ -453,8 +452,8 @@ def get_vox_preds(camera_pos, camera_ori, belief, obj_tp, state, dino_model, con
     
     # Make 0 in all visible voxels
     camera_angle_mat = quat_to_rot(camera_ori)
-    loc = Loc(camera_pos[0], camera_pos[1], np.arccos(camera_angle_mat[0][0]) - np.deg2rad(90))
-    print("Camera Angle", np.arccos(camera_angle_mat[0][0]) - np.deg2rad(90))
+    loc = Loc(camera_pos[0], camera_pos[1], camera_rpy[2])# - np.deg2rad(90))
+    print("Camera Angle", np.arccos(camera_angle_mat[0][0]) - np.deg2rad(90), camera_rpy[2])
     fov = get_fov(loc, config, config['camera_params'], obstacle_map, belief)
     for x, y in fov:
         vxy = world_to_map(np.array([x, y]), map_resolution=belief.map_params['res'], map_size=belief.map_params['size'])
@@ -476,7 +475,7 @@ def get_vox_preds(camera_pos, camera_ori, belief, obj_tp, state, dino_model, con
         cy = bbox[1]
 
         # Get xyz coordinates from image and depth
-        x, y, z = get_real_coords(cx, cy, camera_pos, camera_ori, state['robot0:eyes:Camera:0']['depth'], camera_intrinsic_mat, camera_rel_pos)
+        x, y, z = get_real_coords(cx, cy, camera_pos, camera_ori, state['robot0:eyes:Camera:0']['depth'], camera_intrinsic_mat)
 
         # Translate to map coords and add to prediction
         xy = [x, y]
@@ -493,7 +492,7 @@ def get_vox_preds(camera_pos, camera_ori, belief, obj_tp, state, dino_model, con
 
 
     # Predict score for occluded regions
-    low_likelihood_voxels = predict_unlikely_occluded_voxels(camera_pos, camera_ori, obj_tp, state, config, obstacle_map, belief, dino_model, feature)
+    low_likelihood_voxels = predict_unlikely_occluded_voxels(camera_pos, camera_rpy, obj_tp, state, config, obstacle_map, belief, dino_model, feature)
 
     for vox in low_likelihood_voxels:
         # Loop throught z-dim

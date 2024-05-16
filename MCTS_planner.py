@@ -66,6 +66,10 @@ class MCTS_Tree_Node():
 
         # Find number of illegal actions and subtract from max children
         # Robot Must Start on Map Legally****
+        if self.parent == None:
+            print("End of MCTS Root INIT... Finding LEGAL BELOW:")
+            print("Current number of Children: ", len(self.children))
+            print("Input Number of Children: ", len(children))
         for act in Action:
             if not self.legal(act):
                 self.max_children -= 1
@@ -109,6 +113,8 @@ class MCTS_Tree_Node():
 
         # Add child to children and return
         self.children.append(child)
+        if self.parent == None:
+            print("Adding new child to root. Location: ", self.children[-1].loc.x, self.children[-1].loc.y, self.children[-1].loc.theta)
         return child
 
     def eval_terminal(self):
@@ -179,29 +185,53 @@ class MCTS_Tree_Node():
 
         # CCW Rotation
         if act == Action.R_CCW:
-            return Loc(self.loc.x, self.loc.y, self.loc.theta + math.radians(step_deg))
+            new_loc = Loc(self.loc.x, self.loc.y, self.loc.theta + math.radians(step_deg))
+            if self.parent == None:
+                print("Action: ", act, " Node's Location: ", self.loc.x, self.loc.y, self.loc.theta)
+                print("New Node's Location: ", new_loc.x, new_loc.y, new_loc.theta)
+            return new_loc
         
         # CW Rotation
         if act == Action.R_CW:
-            return Loc(self.loc.x, self.loc.y, self.loc.theta - math.radians(step_deg))
+            new_loc = Loc(self.loc.x, self.loc.y, self.loc.theta - math.radians(step_deg))
+            if self.parent == None:
+                print("Action: ", act, " Node's Location: ", self.loc.x, self.loc.y, self.loc.theta)
+                print("New Node's Location: ", new_loc.x, new_loc.y, new_loc.theta)
+            return new_loc
 
         # Move Forward
         if act == Action.M_FORWARD: 
             new_x = self.loc.x + np.cos(self.loc.theta) * step_len
             new_y = self.loc.y + np.sin(self.loc.theta) * step_len
             # NEEDS TO BE BASED ON ANGLE
-            return Loc(new_x, new_y, self.loc.theta)
+            new_loc = Loc(new_x, new_y, self.loc.theta)
+            
+            if self.parent == None:
+                print("Action: ", act, " Node's Location: ", self.loc.x, self.loc.y, self.loc.theta)
+                print("New Node's Location: ", new_loc.x, new_loc.y, new_loc.theta)
+            return new_loc
 
         # Move Backward
         if act == Action.M_BACKWARD:
             new_x = self.loc.x - np.cos(self.loc.theta) * step_len
             new_y = self.loc.y - np.sin(self.loc.theta) * step_len
             # NEEDS TO BE BASED ON ANGLE
-            return Loc(new_x, new_y, self.loc.theta)
+            new_loc = Loc(new_x, new_y, self.loc.theta)
+            
+            if self.parent == None:
+                print("Action: ", act, " Node's Location: ", self.loc.x, self.loc.y, self.loc.theta)
+                print("New Node's Location: ", new_loc.x, new_loc.y, new_loc.theta)
+            return new_loc
 
         #Observation
         if act == Action.OBS:
-            return Loc(self.loc.x, self.loc.y, self.loc.theta)
+            new_loc = Loc(self.loc.x, self.loc.y, self.loc.theta)
+            
+            if self.parent == None:
+                print("Action: ", act, " Node's Location: ", self.loc.x, self.loc.y, self.loc.theta)
+                print("New Node's Location: ", new_loc.x, new_loc.y, new_loc.theta)
+            return new_loc
+
 
 
     def update(self, reward):
@@ -218,13 +248,22 @@ class MCTS_Planner():
             rollout_policy="Random",
             max_rollout_depth=300):
 
+        print("Initializing New Planner")
+
         root_loc = Loc(start.x, start.y, start.theta)
+        print("Root Location", root_loc.x, root_loc.y, root_loc.theta)
         print("Belief Mean: ", np.mean(pomdp.bel['cup'].p))
 
         self.config = config
         self.max_obs = self.config['planner_params']['max_observations']
-        self.root = MCTS_Tree_Node(root_loc, obstacle_map, 0,
-                self.max_obs)
+        self.root = MCTS_Tree_Node(root_loc,
+                obstacle_map,
+                0,
+                self.max_obs,
+                parent=None,
+                children=[],
+                inbound_act=None,
+                terminal=False)
 
         self.pomdp = pomdp
 
@@ -239,6 +278,8 @@ class MCTS_Planner():
     def search(self):
         start_time = time.time()
 
+        print("Start of mcts seach, root location: ", self.root.loc.x, self.root.loc.y, self.root.loc.theta)
+
         while (time.time() - start_time) < self.max_time:
             leaf = self.traverse(self.root)
             sim_reward = self.rollout(leaf)
@@ -246,8 +287,10 @@ class MCTS_Planner():
 
         print("Returning from Planner")
         print("Num Root Children: ", len(self.root.children))
+        print("End of mcts seach, root location: ", self.root.loc.x, self.root.loc.y, self.root.loc.theta)
         for child in self.root.children:
             print("Child Act: ", child.inbound_act, " Reward: ", child.total_rewards, " Visits: ", child.visits)
+            print("Child Location: ", child.loc.x, child.loc.y, child.loc.theta)
 
         return self.best_child(self.root)
 
@@ -345,5 +388,7 @@ class MCTS_Planner():
             if child.visits > most_visits:
                 most_visits = child.visits
                 best_child = child
+
+        print("Best Child Location: ", best_child.loc.x, best_child.loc.y, best_child.loc.theta)
 
         return best_child
