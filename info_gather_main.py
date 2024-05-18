@@ -7,7 +7,7 @@ from obstacle_map import *
 import torch
 
 #Temp until I get more GPU resources
-torch.cuda.is_available = lambda : False
+#torch.cuda.is_available = lambda : False
 
 import argparse
 

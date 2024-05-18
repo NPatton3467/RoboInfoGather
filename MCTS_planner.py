@@ -37,7 +37,7 @@ class Loc():
 
 class Action(Enum):
     M_FORWARD = 0
-    M_BACKWARD = 1
+    #M_BACKWARD = 1
     R_CCW = 2
     R_CW = 3
     OBS = 4
@@ -212,16 +212,16 @@ class MCTS_Tree_Node():
             return new_loc
 
         # Move Backward
-        if act == Action.M_BACKWARD:
-            new_x = self.loc.x - np.cos(self.loc.theta) * step_len
-            new_y = self.loc.y - np.sin(self.loc.theta) * step_len
-            # NEEDS TO BE BASED ON ANGLE
-            new_loc = Loc(new_x, new_y, self.loc.theta)
+        # if act == Action.M_BACKWARD:
+        #     new_x = self.loc.x - np.cos(self.loc.theta) * step_len
+        #     new_y = self.loc.y - np.sin(self.loc.theta) * step_len
+        #     # NEEDS TO BE BASED ON ANGLE
+        #     new_loc = Loc(new_x, new_y, self.loc.theta)
             
-            if self.parent == None:
-                print("Action: ", act, " Node's Location: ", self.loc.x, self.loc.y, self.loc.theta)
-                print("New Node's Location: ", new_loc.x, new_loc.y, new_loc.theta)
-            return new_loc
+        #     if self.parent == None:
+        #         print("Action: ", act, " Node's Location: ", self.loc.x, self.loc.y, self.loc.theta)
+        #         print("New Node's Location: ", new_loc.x, new_loc.y, new_loc.theta)
+        #     return new_loc
 
         #Observation
         if act == Action.OBS:

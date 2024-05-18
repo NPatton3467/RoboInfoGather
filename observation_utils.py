@@ -16,13 +16,28 @@ import torchvision.transforms.functional as TF
 
 from scipy.spatial.transform import Rotation as R
 
+from matplotlib import pyplot as plt 
+
 # Setup global ram model
-ram_device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-ram_checkpoint = '/robodata/user_data/npatt/OmniGibson/RoboInfoGather/pretrained/ram_plus_swin_large_14m.pth'
+ram_device = 'cpu' #torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+ram_checkpoint = 'C:\\Users\\warri\\OmniGibson\\RoboInfoGather\\pretrained\\ram_plus_swin_large_14m.pth'
 ram_img_size = 384
 ram_model = ram(pretrained=ram_checkpoint, vit='large', image_size=ram_img_size)
 ram_model.eval()
 ram_model.to(ram_device)
+
+def get_ir_o_map(obstacle_map, new_size, dilation_radius_pre=12, erosion_radius_post=2):
+    ir_o_map = np.where(obstacle_map > 0, 100, 0)
+    ir_o_map = ir_o_map.astype('uint8')
+    ir_o_map = cv2.dilate(ir_o_map, np.ones((dilation_radius_pre,dilation_radius_pre)))
+
+    ir_o_map = cv2.resize(ir_o_map, (new_size, new_size))
+    ir_o_map = np.where(ir_o_map > 0, 100, 0).astype('uint8')
+
+    #ir_o_map = cv2.erode(ir_o_map, np.ones((erosion_radius_post,erosion_radius_post)))
+
+    return ir_o_map
+
 
 def get_new_node(current_loc, dist, angle, belief):
     # In robot frame: robot direction is X-axis.
@@ -51,9 +66,12 @@ def get_fov(current_location, config, camera_params, obstacle_map, belief):
     max_v_dist = camera_params['max_visual_distance']
 
     angle_delta = config['rf_params']['angle_delta']
-    dist_delta = config['rf_params']['dist_delta']
+    dist_delta = belief.map_params['res'] * 0.8
 
     angle = min_angle
+
+    # Use inflated and resized obstacle map to not see through walls?
+    inflated_resized_obstacle_map = get_ir_o_map(obstacle_map.obstacles, belief.map_params['size'])
 
     fov = []
     while angle < max_angle:
@@ -76,8 +94,7 @@ def get_fov(current_location, config, camera_params, obstacle_map, belief):
                 break
 
             # Can't see through obstacles so break
-            om_xy = world_to_map(np.array([x,y]), obstacle_map.resolution, obstacle_map.size)
-            if obstacle_map.obstacles[om_xy[0], om_xy[1]]:
+            if inflated_resized_obstacle_map[b_xy[0], b_xy[1]]:
                 break
 
             fov.append((x,y))
@@ -100,13 +117,15 @@ def get_real_coords(x, y, camera_pos, camera_ori, depth_image, camera_intrinsic_
     to translate pixel values to real world cooridnates
     """
 
-    assert False # Do I need to regularize depth, or can I use depth_linear directly?
+    # TODO: assert False # Do I need to regularize depth, or can I use depth_linear directly?
 
     # Calculate 3D coordinates in camera frame
     cx = camera_intrinsic_mat[0][2]
     cy = camera_intrinsic_mat[1][2]
     fx = camera_intrinsic_mat[0][0]
     fy = camera_intrinsic_mat[1][1]
+
+    print(x, y)
 
     camera_coords_z = depth_image[x,y]
 
@@ -299,6 +318,7 @@ def predict_unlikely_occluded_voxels(camera_pos, camera_rpy, obj_tp, state, conf
     appending_to_group = False
     appending_to_group_angle = -1
     appending_to_group_count = 0 # This is for "erosion" -> remove first and last angle in group
+    print("Starting Angle Sweep")
     while angle < max_angle:
         found_occlusion_in_current_angle = False
         while dist < max_v_dist:
@@ -352,6 +372,7 @@ def predict_unlikely_occluded_voxels(camera_pos, camera_rpy, obj_tp, state, conf
             appending_to_group_count = 0
 
 
+    print("Starting Angle Erosion")
     # Now erode voxels at angle boundary of groups (first and last)
     # The idea here is we want to make sure that an object whose center is *anywhere* in that voxel
     # is occluded, and we consider *only* those such voxels
@@ -378,6 +399,7 @@ def predict_unlikely_occluded_voxels(camera_pos, camera_rpy, obj_tp, state, conf
     boxes, obj_names = get_all_object_detections(state, dino_model)
 
 
+    print("Starting Grouping")
     # For each group in the occluded voxels, project into image space and find object that is causing occlusion
     return_voxels = []
     for group in occluded_voxels:
@@ -501,5 +523,7 @@ def get_vox_preds(camera_pos, camera_ori, camera_rpy, belief, obj_tp, state, din
             vxy = world_to_map(np.array([vox[0], vox[1]], map_resolution=belief.map_params['res'], map_size=belief.map_params['size']))
             if voxel_preds[vxy[0], vxy[1], z] == 0:
                 voxel_preds[vxy[0], vxy[1], z] = config['observation_calc_params']['dne_occluded_prob']
+
+    print("Done get_vox_preds")
 
     return voxel_preds

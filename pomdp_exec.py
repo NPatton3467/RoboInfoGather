@@ -75,13 +75,14 @@ def low_level_planner_exec(way_point, pos, yaw, config):
             action = OrderedDict([('robot0', [0 , 0])])
 
         else: # Need to rotate to face correct direction
+            rot_vel = abs(way_point.theta - angle) / np.deg2rad(15)
             if (angle < way_point.theta and abs(way_point.theta - angle) < np.pi) or\
                     (angle > way_point.theta and abs(way_point.theta - angle) > np.pi):
                 # Rotate CCW
-                action = OrderedDict([('robot0', [0 , 1])])
+                action = OrderedDict([('robot0', [0 , rot_vel])])
             else:
                 # Rotate CW
-                action = OrderedDict([('robot0', [0 , -1])])
+                action = OrderedDict([('robot0', [0 , -1 * rot_vel])])
              
     else: # Need to head towards waypoint
         # Get the angle towards the way point and check if we need to rotate to
@@ -104,13 +105,14 @@ def low_level_planner_exec(way_point, pos, yaw, config):
             # Drive towards waypoint
             action = OrderedDict([('robot0', [1 , 0])])
         else: # Need to rotate to face waypoint
+            rot_vel = abs(delta_ang - angle) / np.deg2rad(15)
             if (angle < delta_ang and abs(delta_ang - angle) < np.pi) or\
                     (angle > delta_ang and abs(delta_ang - angle) > np.pi):
                 # Rotate CCW
-                action = OrderedDict([('robot0', [0 , 0.5])])
+                action = OrderedDict([('robot0', [0 , rot_vel])])
             else:
                 # Rotate CW
-                action = OrderedDict([('robot0', [0 , -0.5])])
+                action = OrderedDict([('robot0', [0 , -1 * rot_vel])])
 
 
     return action, reached_way_point
@@ -124,6 +126,8 @@ def pomdp_exec_loop(env, pomdp, obstacle_map, config, dino_model):
     way_point = None
     time_steps_since_MCTS = 0
 
+    iterations = 0
+
     # Run until complete
     done, symbolic_info = pomdp.enough_info()
     print("In POMDP Exec loop -- DONE?: ", done)
@@ -134,6 +138,18 @@ def pomdp_exec_loop(env, pomdp, obstacle_map, config, dino_model):
 
         # Get next action
         if reached_way_point or time_steps_since_MCTS > config['planner_params']['max_time_wo_replan']:
+            # Send some zeros to stop movement
+            i = 0
+            while i < 20:
+                i += 1
+                action = OrderedDict([('robot0', [0 , 0])])
+                print("Executing: ", action)
+                state, _, _, _ = env.step(action)
+
+            pos = env.robots[0].get_position()
+            yaw = env.robots[0].get_rpy()[2]
+            print("Robot Pos/Angle: ", pos, yaw)
+
             print("Entering MCTS Planner")
             way_point = MCTS_planner_exec(pomdp, obstacle_map, config, pos, yaw)
             time_steps_since_MCTS = 0
@@ -158,8 +174,6 @@ def pomdp_exec_loop(env, pomdp, obstacle_map, config, dino_model):
 
         obstacle_map.update(lidar_sensor, scan)
 
-        obstacle_map.visualize()
-
         # Update POMDP
             # 1. Loop over all object types
             # 2. Get all visible voxels for that object types resolution
@@ -178,10 +192,14 @@ def pomdp_exec_loop(env, pomdp, obstacle_map, config, dino_model):
                 pomdp.bel[obj_tp].update(vox_preds, feature=feature)
 
 
-            plt.imshow(pomdp.bel[obj_tp].get_visualization())
-            plt.show()
+            if iterations % 100 == 0:
+                obstacle_map.visualize()
+                plt.imshow(pomdp.bel[obj_tp].get_visualization())
+                plt.show()
 
         # Check if Done
         done, symbolic_info = pomdp.enough_info()
+
+        iterations += 1
 
     return symbolic_info
