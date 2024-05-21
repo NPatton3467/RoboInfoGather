@@ -24,7 +24,7 @@ class ObjTpBel():
         temp_p = [self.p for i in range(self.z_dim)]
         self.p = np.stack(temp_p, axis=2)
 
-        print('Belief shape: ', np.shape(self.p))
+        print('Belief shape: ', self.p.shape)
 
         # For copying later if we get new features to evaluate
         self.backup_p = np.copy(self.p)
@@ -39,13 +39,13 @@ class ObjTpBel():
                         self.feature_bels[feature['name']] = feature_dict
                     elif feature['tp'] == "feature_enum":
                         # For features, we want to keep around names like colour = red
-                        x_dim, y_dim, z_dim = np.shape(self.p)
+                        x_dim, y_dim, z_dim = self.p.shape
                         bel_z = np.array(['' for _ in range(z_dim)], dtype=object)
                         bel_y = np.array([bel_z for _ in range(y_dim)], dtype=object)
                         bel = np.array([bel_y for _ in range(x_dim)], dtype=object)
 
                         # Should have same shape
-                        assert np.shape(bel) == np.shape(self.p)
+                        assert bel.shape == self.p.shape
 
 
                         feature_dict = {'bel': bel, "tp" : feature['tp']}
@@ -56,46 +56,25 @@ class ObjTpBel():
 
 
     def update(self, obs, eps=1e-6, feature=None):
-        """
-        # Discretize voxels and map to belief ranges
-        vxy = [voxel_x, voxel_y]
-        bxy = world_to_map(vxy, self.map_params['res'], self.map_params['size'])
-        bx = bxy[0]
-        by = bxy[1]
-        bz = int(voxel_z / self.map_params['res'])
-
-        # Check that in range
-        if bx not in range(0, self.p.shape[0]):
-            return
-
-        if by not in range(0, self.p.shape[1]):
-            return
-
-        if bz not in range(0, self.p.shape[2]):
-            return
-
-
-        # Check that locaiton is not a wall
-        if self.trav_map[bx, by, bz] != 255:
-            return
-
-        print(f'Updating at Index = ({bx}, {by}, {bz}), with likelihood = {obs}')"""
-
         if feature is None:
             # Update Belief using Binary Bayes Filter
             # CAN THIS BE DONE WITHOUT DOING EACH VOXEL INDIVIDUALLY? -- yes
-            p = self.p
+            log_p = np.log(self.p/(1-self.p))
 
-            log_p = np.log(p/(1-p))
-
-            print("p min/max", np.min(p), "/", np.max(p))
+            print("p min/max", np.min(self.p), "/", np.max(self.p))
             print("obs min/max", np.min(obs), "/", np.max(obs))
 
             inv_sensor_model = np.where(obs != -1, np.log((obs+eps)/(1-obs+eps)), 0)
 
-            new_log_p = np.where(inv_sensor_model != 0, log_p + inv_sensor_model, log_p)
+            #new_log_p = np.where(inv_sensor_model != 0, log_p + inv_sensor_model, log_p)
+            new_log_p = log_p + inv_sensor_model
 
             self.p = 1 - (1/(1+np.exp(new_log_p)))
+            
+            del(inv_sensor_model)
+            del(new_log_p)
+            del(log_p)
+            print("Done Update")
         else:
             print("Feature: ", feature)
             assert False # This needs to change to reflect aribitrary features (e.g. colour will have values of "red" here)

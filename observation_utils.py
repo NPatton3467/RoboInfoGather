@@ -19,12 +19,12 @@ from scipy.spatial.transform import Rotation as R
 from matplotlib import pyplot as plt 
 
 # Setup global ram model
-ram_device = 'cpu' #torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-ram_checkpoint = 'C:\\Users\\warri\\OmniGibson\\RoboInfoGather\\pretrained\\ram_plus_swin_large_14m.pth'
+ram_device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+ram_checkpoint = '/robodata/user_data/npatt/OmniGibson/RoboInfoGather/pretrained/ram_plus_swin_large_14m.pth'
 ram_img_size = 384
 ram_model = ram(pretrained=ram_checkpoint, vit='large', image_size=ram_img_size)
 ram_model.eval()
-ram_model.to(ram_device)
+ram_model = ram_model.to(ram_device)
 
 def get_ir_o_map(obstacle_map, new_size, dilation_radius_pre=12, erosion_radius_post=2):
     ir_o_map = np.where(obstacle_map > 0, 100, 0)
@@ -59,7 +59,7 @@ def get_new_node(current_loc, dist, angle, belief):
     return real_x, real_y
 
 
-def get_fov(current_location, config, camera_params, obstacle_map, belief):
+def get_fov(current_location, config, camera_params, obstacle_map, belief, debug_print=True):
     min_angle = camera_params['min_angle']
     max_angle = camera_params['max_angle']
     min_v_dist = camera_params['min_visual_distance']
@@ -76,7 +76,8 @@ def get_fov(current_location, config, camera_params, obstacle_map, belief):
     fov = []
     while angle < max_angle:
         dist = min_v_dist
-        print(len(fov))
+        if debug_print:
+            print(len(fov))
         while dist < max_v_dist:
             # Get node that corresponds to angle and dist (relative to robot)
             x, y = get_new_node(current_location, dist, angle, belief)
@@ -117,8 +118,6 @@ def get_real_coords(x, y, camera_pos, camera_ori, depth_image, camera_intrinsic_
     to translate pixel values to real world cooridnates
     """
 
-    # TODO: assert False # Do I need to regularize depth, or can I use depth_linear directly?
-
     # Calculate 3D coordinates in camera frame
     cx = camera_intrinsic_mat[0][2]
     cy = camera_intrinsic_mat[1][2]
@@ -126,8 +125,13 @@ def get_real_coords(x, y, camera_pos, camera_ori, depth_image, camera_intrinsic_
     fy = camera_intrinsic_mat[1][1]
 
     print(x, y)
+    x_idx = int(x * depth_image.shape[0])
+    y_idx = int(y * depth_image.shape[1])
 
-    camera_coords_z = depth_image[x,y]
+    print(x_idx, y_idx)
+
+    camera_coords_z = depth_image[x_idx,y_idx]
+    print(camera_coords_z)
 
     camera_coords_x = (x-cx)*camera_coords_z/fx
     camera_coords_y = (y-cy)*camera_coords_z/fy
@@ -135,13 +139,25 @@ def get_real_coords(x, y, camera_pos, camera_ori, depth_image, camera_intrinsic_
     # Translate 3D coordinates to global frame
     c_coord = np.array([camera_coords_x, camera_coords_y, camera_coords_z])
 
+    print(c_coord)
+
     # Set up rotation Matrix based off of camera location
     Rotation = quat_to_rot(camera_ori)
 
     # Set up translation vector based off of actual camera position 
     translation = camera_pos
 
-    world_coords = Rotation*c_coord + translation
+    # Adjust yaw 90 deg for camera
+    theta = np.deg2rad(90)
+    Adj_Rot = np.array([
+        [np.cos(theta), -1*np.sin(theta), 0],
+        [np.sin(theta), np.cos(theta), 0],
+        [0,0,1]
+    ])
+
+    world_coords = np.matmul(Adj_Rot, np.matmul(Rotation, c_coord)) + translation
+    
+    print(world_coords)
 
     return world_coords
 
@@ -167,13 +183,14 @@ def obj_detection(dino_model, obj_tp, state, feature):
     BOX_THRESHOLD = 0.5
     TEXT_THRESHOLD = 0.25
 
-    boxes, logits, _ = predict(
-        model=dino_model,
-        image=img,
-        caption=TEXT_PROMPT,
-        box_threshold=BOX_THRESHOLD,
-        text_threshold=TEXT_THRESHOLD
-    )
+    with torch.no_grad():
+        boxes, logits, _ = predict(
+            model=dino_model,
+            image=img,
+            caption=TEXT_PROMPT,
+            box_threshold=BOX_THRESHOLD,
+            text_threshold=TEXT_THRESHOLD
+        )
 
     return boxes, logits
 
@@ -205,8 +222,9 @@ def get_all_object_detections(state, dino_model):
     transform = get_transform(ram_img_size)
     img = transform(img)
     img = img.unsqueeze(0).to(ram_device)
-        
-    TEXT_PROMPT = inference_ram_openset(img, ram_model)
+       
+    with torch.no_grad():
+        TEXT_PROMPT = inference_ram_openset(img, ram_model)
 
     print("START", TEXT_PROMPT, "END")
     if TEXT_PROMPT == "" or TEXT_PROMPT == " ":
@@ -239,13 +257,14 @@ def get_all_object_detections(state, dino_model):
     BOX_THRESHOLD = 0.35
     TEXT_THRESHOLD = 0.25
 
-    boxes, logits, object_names = predict(
-        model=dino_model,
-        image=img,
-        caption=TEXT_PROMPT,
-        box_threshold=BOX_THRESHOLD,
-        text_threshold=TEXT_THRESHOLD
-    )
+    with torch.no_grad():
+        boxes, logits, object_names = predict(
+            model=dino_model,
+            image=img,
+            caption=TEXT_PROMPT,
+            box_threshold=BOX_THRESHOLD,
+            text_threshold=TEXT_THRESHOLD
+        )
 
     return boxes, object_names
 
@@ -469,7 +488,7 @@ def get_vox_preds(camera_pos, camera_ori, camera_rpy, belief, obj_tp, state, din
     predicted value of object existence.
     """
 
-    voxel_preds = np.ones_like(belief.p)
+    voxel_preds = np.ones(belief.p.shape)
     voxel_preds *= -1
     
     # Make 0 in all visible voxels
@@ -490,14 +509,14 @@ def get_vox_preds(camera_pos, camera_ori, camera_rpy, belief, obj_tp, state, din
     # Get the corresponding voxels
     for i in range(len(boxes)):
         bbox = boxes[i]
-        score = np.exp(logits[i])
+        score = 1/(1+np.exp(-1*logits[i]))
         # Get bounding box center 
         # Grounding Dino format is cxcywh
         cx = bbox[0]
         cy = bbox[1]
 
         # Get xyz coordinates from image and depth
-        x, y, z = get_real_coords(cx, cy, camera_pos, camera_ori, state['robot0:eyes:Camera:0']['depth'], camera_intrinsic_mat)
+        x, y, z = get_real_coords(cx, cy, camera_pos, camera_ori, state['robot0:eyes:Camera:0']['depth_linear'], camera_intrinsic_mat)
 
         # Translate to map coords and add to prediction
         xy = [x, y]

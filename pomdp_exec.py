@@ -132,15 +132,24 @@ def pomdp_exec_loop(env, pomdp, obstacle_map, config, dino_model):
     done, symbolic_info = pomdp.enough_info()
     print("In POMDP Exec loop -- DONE?: ", done)
     while not done:
+        i = 0
+        while i < 20:
+            i += 1
+            action = OrderedDict([('robot0', [0 , 0])])
+            state, _, _, _ = env.step(action)
+        
         pos = env.robots[0].get_position()
         yaw = env.robots[0].get_rpy()[2]
         print("Robot Pos/Angle: ", pos, yaw)
 
         # Get next action
         if reached_way_point or time_steps_since_MCTS > config['planner_params']['max_time_wo_replan']:
+            # Check if Done
+            done, symbolic_info = pomdp.enough_info()
+
             # Send some zeros to stop movement
             i = 0
-            while i < 20:
+            while i < 50:
                 i += 1
                 action = OrderedDict([('robot0', [0 , 0])])
                 print("Executing: ", action)
@@ -194,11 +203,18 @@ def pomdp_exec_loop(env, pomdp, obstacle_map, config, dino_model):
 
             if iterations % 100 == 0:
                 obstacle_map.visualize()
-                plt.imshow(pomdp.bel[obj_tp].get_visualization())
-                plt.show()
 
-        # Check if Done
-        done, symbolic_info = pomdp.enough_info()
+                visualization = pomdp.bel[obj_tp].get_visualization()
+
+
+                res = pomdp.bel[obj_tp].map_params['res']
+                size = pomdp.bel[obj_tp].map_params['size']
+                rp_xy = world_to_map(np.array([pos[0], pos[1]]), res, size)
+
+                visualization[rp_xy[0], rp_xy[1]] = 0.95
+
+                plt.imshow(visualization)
+                plt.show()
 
         iterations += 1
 

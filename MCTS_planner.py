@@ -9,6 +9,8 @@ from enum import Enum
 
 from RoboInfoGather.map_utils import *
 
+import cv2
+
 class Loc():
     def __init__(self, x, y, theta=None):
         self.x = x
@@ -64,6 +66,9 @@ class MCTS_Tree_Node():
 
         self.max_children = len(Action)
 
+        self.is_legal = None
+        self.is_legal = self.legal(Action.OBS)
+
         # Find number of illegal actions and subtract from max children
         # Robot Must Start on Map Legally****
         if self.parent == None:
@@ -71,7 +76,7 @@ class MCTS_Tree_Node():
             print("Current number of Children: ", len(self.children))
             print("Input Number of Children: ", len(children))
         for act in Action:
-            if not self.legal(act):
+            if not self.legal(act) and self.is_legal:
                 self.max_children -= 1
 
 
@@ -122,11 +127,18 @@ class MCTS_Tree_Node():
         return (self.num_prev_obs == (self.max_obs - 1)) and self.inbound_act == Action.OBS
 
     def legal(self, act):
+        # Allow "illegal" actions if robot is stuck in inflated obstacle zone
+        if self.is_legal != None and not self.is_legal:
+            return True
+
         new_loc = self.get_loc(act)
 
         xy = [new_loc.x, new_loc.y]
 
         mxy = world_to_map(xy, self.obstacle_map.resolution, self.obstacle_map.size)
+
+        dilate_rad = int(np.ceil(0.2 / self.obstacle_map.resolution))
+        local_obs_map = cv2.dilate(self.obstacle_map.obstacles, np.ones((dilate_rad,dilate_rad)))
 
         # Check that new location is within the map bounds
         if mxy[0] < 0 or mxy[0] >= self.obstacle_map.size or\
@@ -134,7 +146,7 @@ class MCTS_Tree_Node():
             return False
         
         # Check if new location would cause a collision
-        if self.obstacle_map.obstacles[mxy[0], mxy[1]] > 0:
+        if local_obs_map[mxy[0], mxy[1]] > 0:
             return False
 
         return True
@@ -252,7 +264,6 @@ class MCTS_Planner():
 
         root_loc = Loc(start.x, start.y, start.theta)
         print("Root Location", root_loc.x, root_loc.y, root_loc.theta)
-        print("Belief Mean: ", np.mean(pomdp.bel['cup'].p))
 
         self.config = config
         self.max_obs = self.config['planner_params']['max_observations']
@@ -316,6 +327,9 @@ class MCTS_Planner():
         reward = 0
         for obj_tp in self.pomdp.reward_funcs.keys():
             reward += self.pomdp.reward_funcs[obj_tp].eval(self.pomdp.bel[obj_tp], self.obstacle_map, self.root, node)
+
+        # Penalize Longer sequences
+        reward = reward / (depth + 1)
 
         return reward
 
@@ -385,7 +399,7 @@ class MCTS_Planner():
         most_visits = 0
         best_child = node.children[0]
         for child in node.children:
-            if child.visits > most_visits:
+            if child.visits > most_visits and child.inbound_act != Action.OBS:
                 most_visits = child.visits
                 best_child = child
 

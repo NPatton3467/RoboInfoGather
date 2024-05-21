@@ -8,8 +8,8 @@ render:
 scene:
   type: InteractiveTraversableScene
   scene_model: Rs_int #Change this line and next three to modify scene
-  scene_file: mod_scenes\Rs_int_DONE.json
-  trav_map_path: omnigibson\data\og_dataset\scenes\Rs_int\layout\
+  scene_file: /robodata/user_data/npatt/OmniGibson/mod_scenes/Rs_int_DONE.json
+  trav_map_path: /robodata/user_data/npatt/OmniGibsonData/data/og_dataset/scenes/Rs_int/layout/
   floor: 0 # By default
   trav_map_resolution: 0.01 # Change this to modify map resolution
   trav_map_erosion: 0
@@ -27,7 +27,7 @@ scene:
 
 robots:
   - type: Turtlebot
-    obs_modalities: [scan, rgb, depth, occupancy_grid]
+    obs_modalities: [scan, rgb, depth, depth_linear, occupancy_grid]
     scale: 1.0
     self_collision: false
     action_normalize: true

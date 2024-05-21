@@ -52,7 +52,7 @@ class POMDP():
             # Get the locally supressed belief to help localization
             local_bel = self.bel[obj_tp]
 
-            local_bel_shape = np.shape(local_bel.p)
+            local_bel_shape = local_bel.p.shape
 
             # TODO: There has to be a better way to do this
             cur_obj_dict = {}
@@ -122,7 +122,7 @@ class POMDP():
     def kl(self, p, q):
         return np.sum(np.where(p != 0, p*np.log(p/q), 0))
 
-    def visualize(self):
+    def visualize(self, rob_pos):
         for obj_tp in self.figures:
             visualization = self.bel[obj_tp].get_visualization()
 

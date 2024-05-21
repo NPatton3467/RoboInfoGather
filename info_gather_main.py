@@ -23,7 +23,7 @@ def main(nl):
     """
 
     # Load the config
-    config_filename = os.path.join(f"./RoboInfoGather/info_gather.yaml")
+    config_filename = os.path.join(f"/robodata/user_data/npatt/OmniGibson/RoboInfoGather/info_gather.yaml")
     config = yaml.load(open(config_filename, "r"), Loader=yaml.FullLoader)
 
     # check if we want to quick load or full load the scene
@@ -49,9 +49,10 @@ def main(nl):
     prog = gen_prog_from_nl(nl)
 
     # Set up models
-    CONFIG_PATH = os.path.join("./GroundingDINO/groundingdino/config/GroundingDINO_SwinT_OGC.py")
-    WEIGHTS_PATH = os.path.join("./GroundingDINO/weights/groundingdino_swint_ogc.pth")
+    CONFIG_PATH = os.path.join("/robodata/user_data/npatt/OmniGibson/GroundingDINO/groundingdino/config/GroundingDINO_SwinT_OGC.py")
+    WEIGHTS_PATH = os.path.join("/robodata/user_data/npatt/OmniGibson/GroundingDINO/weights/groundingdino_swint_ogc.pth")
     dino_model = load_model(CONFIG_PATH, WEIGHTS_PATH)
+    dino_model = dino_model.to(torch.device('cuda'))
 
 
     # Setup obstacle map
