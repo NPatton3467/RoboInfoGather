@@ -18,7 +18,7 @@ scene:
   num_waypoints: 1
   waypoint_resolution: 0.2
   load_object_categories: null
-  not_load_object_categories: null # Can remove object categories here e.g. ["door"]
+  not_load_object_categories: ["chair"] # Can remove object categories here e.g. ["door"]
   load_room_types: null
   load_room_instances: null
   seg_map_resolution: 0.1
@@ -32,6 +32,7 @@ robots:
     self_collision: false
     action_normalize: true
     action_type: continuous
+    visible: true
     controller_config:
       base:
         name: DifferentialDriveController
@@ -75,17 +76,21 @@ rf_params:
     dist_delta: 0.1
 
 bel_params:
-  akld_hist_len: 100
-  akld_stop: 0.01
+  akld_hist_len: 20
+  akld_stop: 0.1
   visualize: false
 
 planner_params:
-  max_time: 5.0
+  max_time: 30
+  mcts_step_length: 0.5
+  mcts_step_deg: 15
   max_observations: 1
-  max_time_wo_replan: 100
-  way_point_loc_acc: 0.05
-  way_point_ang_acc: 0.09
-  way_point_direction_angle: 0.12
+  max_time_wo_replan: 500
+  way_point_loc_acc: 0.1
+  carrot_loc_acc: 0.075
+  way_point_ang_acc: 0.15
+  way_point_direction_angle: 0.15
+  teleport: false
 
 observation_calc_params:
   dne_occluded_prob: 0.35

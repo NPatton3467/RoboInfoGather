@@ -12,6 +12,8 @@ class ObstacleMap():
         self.size = size
         self.obstacles = np.zeros((self.size, self.size))
 
+        self.cur_world_scan = None
+
     def update(self, scan_sensor, scan, eps=1e-6):
         # Get xy locations where obstacle's are detected
         obstacle_detection_locs = []
@@ -32,6 +34,9 @@ class ObstacleMap():
 
 
         scan_world = np.squeeze(scan_world)
+        
+        
+        self.cur_world_scan = []
 
         for xyz in scan_world:
             xy_obstacle_map = world_to_map((xyz[0], xyz[1]), self.resolution, self.size)
@@ -44,6 +49,8 @@ class ObstacleMap():
 
                 if xyz[2] < 0.02:
                     continue
+
+                self.cur_world_scan.append(xyz)
 
                 # Doing something wrong here. Lidar is mounted 90 degrees from flat (scaning into z axis)
                 # My transforms ought to work here but they don't
@@ -60,4 +67,4 @@ class ObstacleMap():
 
     def visualize(self):
         plt.imshow(self.obstacles)
-        plt.show()
+        plt.savefig('cur_obstacle_map.png')

@@ -13,10 +13,10 @@ from matplotlib import pyplot as plt
 def gen_prog_from_nl(nl):
     # TODO TEMPORARY
     print("True where clause -- single object")
-    new_where = WhereClause(where_tp='true', obj_tp="cup")
+    new_where = WhereClause(where_tp='true', obj_tp="Chair")
     print(new_where.pretty_str())
 
-    new_query = Query(obj_tp="cup", where_clause=new_where)
+    new_query = Query(obj_tp="Chair", where_clause=new_where)
 
     new_prog = Prog([new_query])
 

@@ -26,17 +26,21 @@ ram_model = ram(pretrained=ram_checkpoint, vit='large', image_size=ram_img_size)
 ram_model.eval()
 ram_model = ram_model.to(ram_device)
 
-def get_ir_o_map(obstacle_map, new_size, dilation_radius_pre=12, erosion_radius_post=2):
-    ir_o_map = np.where(obstacle_map > 0, 100, 0)
-    ir_o_map = ir_o_map.astype('uint8')
-    ir_o_map = cv2.dilate(ir_o_map, np.ones((dilation_radius_pre,dilation_radius_pre)))
+def get_ir_o_map(obstacle_map, new_size, dilation_radius_pre=13, erosion_radius_post=2):
+    # ir_o_map = np.where(obstacle_map > 0, 100, 0)
+    # ir_o_map = ir_o_map.astype('uint8')
+    # ir_o_map = cv2.dilate(ir_o_map, np.ones((dilation_radius_pre,dilation_radius_pre)))
 
-    ir_o_map = cv2.resize(ir_o_map, (new_size, new_size))
-    ir_o_map = np.where(ir_o_map > 0, 100, 0).astype('uint8')
+    # ir_o_map = cv2.resize(ir_o_map, (new_size, new_size))
+    # ir_o_map = np.where(ir_o_map > 0, 100, 0).astype('uint8')
 
-    #ir_o_map = cv2.erode(ir_o_map, np.ones((erosion_radius_post,erosion_radius_post)))
+    # ir_o_map = cv2.erode(ir_o_map, np.ones((erosion_radius_post,erosion_radius_post)))
 
-    return ir_o_map
+    # return ir_o_map
+
+    local_obs_map = cv2.dilate(obstacle_map.obstacles, np.ones((dilation_radius_pre,dilation_radius_pre)))
+
+    return local_obs_map
 
 
 def get_new_node(current_loc, dist, angle, belief):
@@ -66,16 +70,16 @@ def get_fov(current_location, config, camera_params, obstacle_map, belief, debug
     max_v_dist = camera_params['max_visual_distance']
 
     angle_delta = config['rf_params']['angle_delta']
-    dist_delta = belief.map_params['res'] * 0.8
+    dist_delta = min(0.15, obstacle_map.resolution * 0.8)
 
     angle = min_angle
 
     # Use inflated and resized obstacle map to not see through walls?
-    inflated_resized_obstacle_map = get_ir_o_map(obstacle_map.obstacles, belief.map_params['size'])
+    inflated_resized_obstacle_map = get_ir_o_map(obstacle_map, belief.map_params['size'])
 
     fov = []
     while angle < max_angle:
-        dist = min_v_dist
+        dist = 0
         if debug_print:
             print(len(fov))
         while dist < max_v_dist:
@@ -84,21 +88,19 @@ def get_fov(current_location, config, camera_params, obstacle_map, belief, debug
 
             # Skip if already added
             if (x, y) in fov:
+                assert False #???
                 dist += dist_delta
                 continue
 
-            # Check that x,y are within map bounds
-            x_max = belief.map_params['size']
-            y_max = belief.map_params['size']
-            b_xy = world_to_map(np.array([x,y]), belief.map_params['res'], belief.map_params['size'])
-            if b_xy[0] not in range(0, x_max) or b_xy[1] not in range(0, y_max):
+            # Check that x,y are within map bounds and not occluded 
+            o_size = obstacle_map.size
+            o_xy = world_to_map(np.array([x,y]), obstacle_map.resolution, obstacle_map.size)
+            if o_xy[0] not in range(0, o_size) or o_xy[1] not in range(0, o_size) or \
+                    inflated_resized_obstacle_map[o_xy[0], o_xy[1]] > 0:
                 break
 
-            # Can't see through obstacles so break
-            if inflated_resized_obstacle_map[b_xy[0], b_xy[1]]:
-                break
-
-            fov.append((x,y))
+            if dist > min_v_dist:
+                fov.append((x,y))
 
             # Increment distance
             dist += dist_delta
@@ -496,8 +498,14 @@ def get_vox_preds(camera_pos, camera_ori, camera_rpy, belief, obj_tp, state, din
     loc = Loc(camera_pos[0], camera_pos[1], camera_rpy[2])# - np.deg2rad(90))
     print("Camera Angle", np.arccos(camera_angle_mat[0][0]) - np.deg2rad(90), camera_rpy[2])
     fov = get_fov(loc, config, config['camera_params'], obstacle_map, belief)
+    checked_xy = []
     for x, y in fov:
         vxy = world_to_map(np.array([x, y]), map_resolution=belief.map_params['res'], map_size=belief.map_params['size'])
+        if (vxy[0], vxy[1]) in checked_xy:
+            continue
+        else:
+            checked_xy.append((vxy[0], vxy[1]))
+
         for z in range(belief.z_dim):
             # Set 0 for whole z_dim
             voxel_preds[vxy[0], vxy[1], z] = 0
@@ -526,10 +534,13 @@ def get_vox_preds(camera_pos, camera_ori, camera_rpy, belief, obj_tp, state, din
 
         vx = vxy[0]
         vy = vxy[1]
-        vz = int(z / map_resolution)
 
-        # Put score in prediction output
-        voxel_preds[vx, vy, vz] = score
+        if not np.isnan(z):
+            vz = int(z / map_resolution)
+
+            # Put score in prediction output
+            if vx < map_size and vy < map_size and vz < voxel_preds.shape[2]:
+                voxel_preds[vx, vy, vz] = score
 
 
     # Predict score for occluded regions

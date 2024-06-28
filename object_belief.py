@@ -12,12 +12,14 @@ class ObjTpBel():
         self.configs = configs
         self.relevant_features = relevant_features
         
-        self.p = np.copy(self.trav_map)
+        #self.p = np.copy(self.trav_map)
+        self.p = np.ones_like(self.trav_map)
+        self.p = self.p * 0.5
 
         print(f'Belief Created with (xdim, y_dim) = ({self.p.shape})')
 
         # Start with uniform prior, where traversable
-        self.p = np.where((self.p == 255), 0.5, 0)
+        #self.p = np.where((self.p == 255), 0.5, 0)
 
         # Need to replicate vertically
         self.z_dim = int(self.configs['rf_params']['map_height'] / self.map_params['res'])

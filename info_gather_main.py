@@ -72,6 +72,11 @@ def main(nl):
     cur_scan_pos[2] += 0.1
     env.robots[0]._sensors['robot0:scan_link:Lidar:0'].set_position_orientation(cur_scan_pos, rob_ori)
 
+    # Change Camera Mounting
+    camera_pos, camera_ori = env.robots[0]._sensors['robot0:eyes:Camera:0'].get_position_orientation()
+    camera_pos[2] += 0.2
+    env.robots[0]._sensors['robot0:eyes:Camera:0'].set_position_orientation(camera_pos, camera_ori)
+
     size, _ = trav_map.shape
     obstacle_map = ObstacleMap(resolution, size)
 

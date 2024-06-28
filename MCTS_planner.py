@@ -39,13 +39,13 @@ class Loc():
 
 class Action(Enum):
     M_FORWARD = 0
-    #M_BACKWARD = 1
+    M_BACKWARD = 1
     R_CCW = 2
     R_CW = 3
     OBS = 4
 
 class MCTS_Tree_Node():
-    def __init__(self, loc, obstacle_map, num_prev_obs, max_obs,
+    def __init__(self, loc, obstacle_map, num_prev_obs, max_obs, config,
             parent=None, children=[], inbound_act=None, terminal=False):
 
         
@@ -55,6 +55,8 @@ class MCTS_Tree_Node():
 
         self.num_prev_obs = num_prev_obs
         self.max_obs = max_obs
+
+        self.config = config
 
         self.children = children
         self.parent = parent
@@ -109,6 +111,7 @@ class MCTS_Tree_Node():
                 obstacle_map = self.obstacle_map,
                 num_prev_obs = new_num_prev_obs,
                 max_obs = self.max_obs,
+                config = self.config,
                 parent = self,
                 children = [],
                 inbound_act = act,
@@ -124,7 +127,8 @@ class MCTS_Tree_Node():
 
     def eval_terminal(self):
         # TODO THINK ABOUT THIS MORE
-        return (self.num_prev_obs == (self.max_obs - 1)) and self.inbound_act == Action.OBS
+        #return (self.num_prev_obs == (self.max_obs - 1)) and self.inbound_act == Action.OBS
+        return self.inbound_act == Action.OBS
 
     def legal(self, act):
         # Allow "illegal" actions if robot is stuck in inflated obstacle zone
@@ -137,7 +141,7 @@ class MCTS_Tree_Node():
 
         mxy = world_to_map(xy, self.obstacle_map.resolution, self.obstacle_map.size)
 
-        dilate_rad = int(np.ceil(0.2 / self.obstacle_map.resolution))
+        dilate_rad = int(np.ceil(0.075 / self.obstacle_map.resolution))
         local_obs_map = cv2.dilate(self.obstacle_map.obstacles, np.ones((dilate_rad,dilate_rad)))
 
         # Check that new location is within the map bounds
@@ -192,8 +196,8 @@ class MCTS_Tree_Node():
         # Rotations are ~15 degrees
         # Motition is 0.5m
 
-        step_deg = 15
-        step_len = 0.15
+        step_deg = self.config['planner_params']['mcts_step_deg']
+        step_len = self.config['planner_params']['mcts_step_length']
 
         # CCW Rotation
         if act == Action.R_CCW:
@@ -224,16 +228,16 @@ class MCTS_Tree_Node():
             return new_loc
 
         # Move Backward
-        # if act == Action.M_BACKWARD:
-        #     new_x = self.loc.x - np.cos(self.loc.theta) * step_len
-        #     new_y = self.loc.y - np.sin(self.loc.theta) * step_len
-        #     # NEEDS TO BE BASED ON ANGLE
-        #     new_loc = Loc(new_x, new_y, self.loc.theta)
+        if act == Action.M_BACKWARD:
+            new_x = self.loc.x - np.cos(self.loc.theta) * step_len
+            new_y = self.loc.y - np.sin(self.loc.theta) * step_len
+            # NEEDS TO BE BASED ON ANGLE
+            new_loc = Loc(new_x, new_y, self.loc.theta)
             
-        #     if self.parent == None:
-        #         print("Action: ", act, " Node's Location: ", self.loc.x, self.loc.y, self.loc.theta)
-        #         print("New Node's Location: ", new_loc.x, new_loc.y, new_loc.theta)
-        #     return new_loc
+            if self.parent == None:
+                print("Action: ", act, " Node's Location: ", self.loc.x, self.loc.y, self.loc.theta)
+                print("New Node's Location: ", new_loc.x, new_loc.y, new_loc.theta)
+            return new_loc
 
         #Observation
         if act == Action.OBS:
@@ -258,7 +262,7 @@ class MCTS_Planner():
             config,
             epsilon=1e-1,
             rollout_policy="Random",
-            max_rollout_depth=300):
+            max_rollout_depth=50):
 
         print("Initializing New Planner")
 
@@ -271,6 +275,7 @@ class MCTS_Planner():
                 obstacle_map,
                 0,
                 self.max_obs,
+                config,
                 parent=None,
                 children=[],
                 inbound_act=None,
@@ -306,7 +311,7 @@ class MCTS_Planner():
         return self.best_child(self.root)
 
     def traverse(self, node):
-        while len(node.children) == node.max_children:
+        while len(node.children) == node.max_children and not node.terminal:
             node = self.best_ucb(node)
 
         if node.terminal:
@@ -317,19 +322,17 @@ class MCTS_Planner():
     def rollout(self, node):
         terminal = node.terminal
         depth = 0
+        reward = 0
         while not terminal and depth < self.max_rollout_depth:
             node = self.rollout_policy(node)
             terminal = node.terminal
             
+            # Calculate reward for all object types
+            for obj_tp in self.pomdp.reward_funcs.keys():
+                reward += (0.99 ** depth) * self.pomdp.reward_funcs[obj_tp].eval(self.pomdp.bel[obj_tp], self.obstacle_map, self.root, node)
+            
             depth += 1
 
-        # Calculate reward for all object types
-        reward = 0
-        for obj_tp in self.pomdp.reward_funcs.keys():
-            reward += self.pomdp.reward_funcs[obj_tp].eval(self.pomdp.bel[obj_tp], self.obstacle_map, self.root, node)
-
-        # Penalize Longer sequences
-        reward = reward / (depth + 1)
 
         return reward
 
@@ -355,6 +358,7 @@ class MCTS_Planner():
                     obstacle_map = node.obstacle_map,
                     num_prev_obs = new_num_prev_obs,
                     max_obs = node.max_obs,
+                    config = self.config,
                     parent = node,
                     children = [],
                     inbound_act = act,

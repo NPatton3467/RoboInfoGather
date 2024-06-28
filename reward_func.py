@@ -13,7 +13,7 @@ class RewardFunc():
     def eval(self, belief, obstacle_map, root, node):
         # If not taking an observation action return 0
         if node.inbound_act != Action.OBS:
-            return 0
+           return 0
 
         # Get grid spaces within robots FOV
         local_config = {'rf_params': {'angle_delta' : self.rf_params['angle_delta']}}
@@ -22,12 +22,18 @@ class RewardFunc():
         reward = 0.0
         x_max = belief.map_params['size']
         y_max = belief.map_params['size']
+        checked_xy = []
         for (x,y) in locs:
             bxy = world_to_map(np.array([x, y]), belief.map_params['res'], belief.map_params['size'])
 
             # Skip if bordeline out of range
             if bxy[0] not in range(0, x_max) or bxy[1] not in range(0, y_max):
                 continue
+
+            if (bxy[0], bxy[1]) in checked_xy:
+                continue
+            else:
+                checked_xy.append((bxy[0], bxy[1]))
 
             for z in range(belief.z_dim):
                 p = belief.p[bxy[0], bxy[1], z]
