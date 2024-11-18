@@ -6,7 +6,7 @@ from groundingdino.util.inference import predict
 import groundingdino.datasets.transforms as T
 from RoboInfoGather.MCTS_planner import Loc
 
-from omnigibson.utils.vision_utils import *
+#from omnigibson.utils.vision_utils import *
 
 from ram.models import ram
 from ram import inference_ram, inference_tag2text, inference_ram_openset

@@ -3,8 +3,8 @@ import pickle
 
 import yaml
 
-import omnigibson as og
-from omnigibson.utils.ui_utils import choose_from_options
+#import omnigibson as og
+#from omnigibson.utils.ui_utils import choose_from_options
 
 from collections import OrderedDict
 from matplotlib import pyplot as plt
