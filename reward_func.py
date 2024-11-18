@@ -12,17 +12,27 @@ class RewardFunc():
 
     def eval(self, belief, obstacle_map, root, node):
         # If not taking an observation action return 0
-        if node.inbound_act != Action.OBS:
+        if (node.inbound_act != Action.OBS ):# and
+            #node.inbound_act != Action.L_N and
+            #node.inbound_act != Action.L_NE and
+            #node.inbound_act != Action.L_E and
+            #node.inbound_act != Action.L_SE and
+            #node.inbound_act != Action.L_S and
+            #node.inbound_act != Action.L_SW and
+            #node.inbound_act != Action.L_W and
+            #node.inbound_act != Action.L_NW):
            return 0
 
         # Get grid spaces within robots FOV
         local_config = {'rf_params': {'angle_delta' : self.rf_params['angle_delta']}}
-        locs = get_fov(node.loc, local_config, self.camera_params, obstacle_map, belief, debug_print=False)
+        #locs = get_fov(node.loc, local_config, self.camera_params, obstacle_map, belief, debug_print=False)
+        locs, _ = get_fov(node.loc, local_config, self.camera_params, obstacle_map, belief, debug_print=False)
 
         reward = 0.0
         x_max = belief.map_params['size']
         y_max = belief.map_params['size']
         checked_xy = []
+        num_checked = 0
         for (x,y) in locs:
             bxy = world_to_map(np.array([x, y]), belief.map_params['res'], belief.map_params['size'])
 
@@ -38,9 +48,14 @@ class RewardFunc():
             for z in range(belief.z_dim):
                 p = belief.p[bxy[0], bxy[1], z]
                 if p > 0.0 and p < 1.0:
+                    num_checked += 1
                     reward += p * np.log(p) + (1-p)*np.log(1-p)
 
-        reward *= -1
+        reward = -1*reward/max(1, num_checked)
+
+        print('Num Checked: ', len(checked_xy))
+        print('Actual Num Checked: ', num_checked)
+        print('Num in FOV: ', len(locs))
 
         # Add distance to get observation
         # root_x = root.loc.x

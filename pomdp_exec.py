@@ -1,4 +1,5 @@
 import os
+import pickle
 
 import yaml
 
@@ -71,23 +72,156 @@ def get_path(start_pos, child_node, obstacle_map):
     return -1, cur_node.loc.theta
 
 
-def MCTS_planner_exec(pomdp, obstacle_map, configs, pos, yaw):
+def sample_locs(start, pomdp, obstacle_map, configs):
+    best_reward = 0
+    best_sample_node = None
+    best_astar_path = []
+
+    num_checked = 0
+
+
+    while num_checked < configs['planner_params']['max_num_samples']:
+        # Sample Inflated Obstalce map for map coords
+        o_size = obstacle_map.size
+        o_res = obstacle_map.resolution
+        s_disc = configs['planner_params']['sample_discretization']
+        x_obs_map_coords = np.random.randint(0, int(o_size/s_disc)) * s_disc
+        y_obs_map_coords = np.random.randint(0, int(o_size/s_disc)) * s_disc
+
+        xy_world_coords = map_to_world(np.array([x_obs_map_coords, y_obs_map_coords]), o_res, o_size)
+
+        # Check if legal in belief
+        legal = True
+        for key in pomdp.bel.keys():
+            b_res = pomdp.bel[key].map_params['res']
+            b_size = pomdp.bel[key].map_params['size']
+            xy_bel_coords = world_to_map(xy_world_coords, b_res, b_size)
+
+            if xy_bel_coords[0] >= pomdp.bel[key].p.shape[0]:
+                legal = False
+                break
+        
+            if xy_bel_coords[1] >= pomdp.bel[key].p.shape[1]:
+                legal = False
+                break
+
+            if (pomdp.bel[key].p[xy_bel_coords[0], xy_bel_coords[1]] == -1).any():
+                legal = False
+                break
+
+        if not legal:
+            continue
+
+        # Check if feasible path
+        state = {'pos': np.array([start.x, start.y])}
+        goal_pos = xy_world_coords
+        path = a_star(goal_pos, state, obstacle_map)
+
+        if path == []:
+            continue
+
+        # Check reward
+        root = None
+        t_s_disc = configs['planner_params']['angle_sample_discretization']
+        theta = np.deg2rad(np.random.randint(0, int(360/t_s_disc)) * t_s_disc)
+        pred_goal_loc = Loc(goal_pos[0], goal_pos[1], theta)
+        node = MCTS_Tree_Node(
+                loc=pred_goal_loc,
+                obstacle_map = obstacle_map,
+                num_prev_obs = 0,
+                max_obs = 1,
+                config = configs,
+                inbound_act = Action.OBS
+                )
+        reward = 0
+        for key in pomdp.bel.keys():
+            belief = pomdp.bel[key]
+            reward += pomdp.reward_funcs[key].eval(belief, obstacle_map, root, node)
+
+        if reward > best_reward:
+            best_reward = reward
+            best_sample_node = node
+            best_astar_path = path
+
+        num_checked += 1
+
+    print("Done Sample Locs")
+    print("Best Loc: ", best_sample_node.loc.x, best_sample_node.loc.y, best_sample_node.loc.theta)
+    print("Best Reward: ", best_reward)
+    return best_sample_node, best_astar_path
+
+def MCTS_planner_exec(pomdp, obstacle_map, configs, pos, yaw, iteration):
     # Instantiate new planner
     # Can't reuse old tree since info is probably not relevant anymore????
     start = Loc(pos[0], pos[1], yaw)
 
     max_map_dim = obstacle_map.size * obstacle_map.resolution
-    max_rollout_depth = int(np.sqrt(2 * (max_map_dim ** 2)) * 1.5 / configs['planner_params']['mcts_step_length']) + 1
+    #max_rollout_depth = int(np.sqrt(2 * (max_map_dim ** 2)) * 1.5 / configs['planner_params']['mcts_step_length']) + 1
+    #max_rollout_depth = int(np.sqrt(2 * (max_map_dim ** 2)) * 1.5 / 0.25) + 1
+    max_rollout_depth = configs['planner_params']['max_rollout_depth']
 
-    planner = MCTS_Planner(start, pomdp, obstacle_map, configs, max_rollout_depth=max_rollout_depth)
+    #planner = MCTS_Planner(start, pomdp, obstacle_map, configs, max_rollout_depth=max_rollout_depth)
 
-    best_next_node = planner.search()
+    #best_next_node = planner.search()
+
+    best_next_node, astar_path = sample_locs(start, pomdp, obstacle_map, configs)
 
     print("MCTS Action: ", best_next_node.inbound_act)
     print("MCTS Loc: ", best_next_node.loc.x, best_next_node.loc.y, best_next_node.loc.theta)
     print("MCTS Total Reward/Vists: ", best_next_node.total_rewards, best_next_node.visits)
 
-    return best_next_node
+    # Debug -- print belief, cur_loc and new_loc
+    if True:
+        def get_last_node(node, res, size):
+            cur_node = node
+            while len(cur_node.children) > 0:
+                best_child = cur_node.children[0]
+                highest_reward = best_child.visits
+
+                for child in cur_node.children:
+                    if child.total_rewards > highest_reward:
+                        highest_reward = child.total_rewards
+                        best_child = child
+
+                cur_node = best_child
+            x = cur_node.loc.x
+            y = cur_node.loc.y
+            t = cur_node.loc.theta
+            return world_to_map(np.array([cur_node.loc.x, cur_node.loc.y]), res, size), x,y,t
+
+        for key in pomdp.bel.keys():
+            res = pomdp.bel[key].map_params['res']
+            size = pomdp.bel[key].map_params['size']
+            cur_loc_map_coords =  world_to_map(np.array([start.x, start.y]), res, size)
+            goal_loc_map_coords, x,y,t = get_last_node(best_next_node, res, size)
+            
+            b = np.copy(pomdp.bel[key].p)
+
+            b = np.mean(b, axis=2)
+            
+            b[cur_loc_map_coords[0], cur_loc_map_coords[1]] = 2
+            b[goal_loc_map_coords[0], goal_loc_map_coords[1]] = 3
+
+            # For belief readability
+            b = np.where(b == -1, 0, b)
+
+            #plt.close()
+            #heatmap = plt.pcolor(b)
+            #plt.colorbar(heatmap)
+            #plt.gca().invert_yaxis()
+            #plt.show()
+
+            with open(f'/robodata/user_data/npatt/OmniGibson/debug/MCTS/{iteration}.pkl', 'wb') as f:
+                pickle.dump(pomdp, f)
+
+            start_arr = np.array([start.x, start.y, yaw])
+            goal_arr = np.array([x,y,t])
+            
+            np.save(f'/robodata/user_data/npatt/OmniGibson/debug/MCTS/start_{iteration}.npy', start_arr)
+            np.save(f'/robodata/user_data/npatt/OmniGibson/debug/MCTS/goal_{iteration}.npy', goal_arr)
+
+
+    return best_next_node, astar_path
 
 """
 def low_level_planner_exec(path, pos, yaw, goal_yaw, config):
@@ -164,11 +298,11 @@ def pomdp_exec_loop(env, pomdp, obstacle_map, config, dino_model):
     Main loop for pomdp_execution
     """
     action = OrderedDict([('robot0', [0 , 0])])
-    state, _, _, _ = env.step(action)
+    state, _, _, info = env.step(action)
 
     #while True:
     #    action = OrderedDict([('robot0', [0, 1])])
-    #    state, _, _, _ = env.step(action)
+    #    state, _, _, info = env.step(action)
 
     #    print("Angular Velocity: ", env.robots[0].get_angular_velocity())
     #    print("Velocity: ", env.robots[0].get_linear_velocity())
@@ -179,29 +313,91 @@ def pomdp_exec_loop(env, pomdp, obstacle_map, config, dino_model):
     # Offset camera angle correctly
     camera_rpy[2] += np.deg2rad(90)
     camera_intrinsic_mat = env.robots[0]._sensors['robot0:eyes:Camera:0'].intrinsic_matrix
+    camera_params = env.robots[0]._sensors['robot0:eyes:Camera:0'].camera_parameters
+
+    proj = np.array(env.robots[0]._sensors['robot0:eyes:Camera:0'].camera_parameters['cameraProjection'])
+    proj = np.reshape(proj, (4,4))
+    view = np.array(env.robots[0]._sensors['robot0:eyes:Camera:0'].camera_parameters['cameraViewTransform'])
+    view = np.reshape(view, (4,4))
+    print("Proj: ", proj)
+    print("View: ", view)
+    proj_view = np.matmul(view,proj)
+    print("View Proj Mat: ", proj_view)
+
+    pos, ori = env.robots[0].get_position_orientation()
+    pitch, roll, yaw = env.robots[0].get_rpy()
+    print("Robot Pos/Angle: ", pos, yaw)
+
+    og_pitch, og_roll, yaw = env.robots[0].get_rpy()
 
     # Update Obstacle map 
     lidar_sensor = env.robots[0]._sensors['robot0:scan_link:Lidar:0']
     print(state['robot0'].keys())
     scan = state['robot0']['robot0:scan_link:Lidar:0']['scan']
 
+    """
+    obs, info = env.robots[0]._sensors['robot0:eyes:Camera:0']._get_obs()
+
+    print("OBS: ", obs)
+    print("INFO: ", info)
+
+    print(info['seg_instance'])
+
+    straight_chair_amgwaw_0_id = -1
+    for inst_id in info['seg_instance']:
+        if info['seg_instance'][inst_id] == 'straight_chair_amgwaw_0':
+            straight_chair_amgwaw_0_id = inst_id
+            break
+   
+    temp_seg = state['robot0']['robot0:eyes:Camera:0']['seg_instance']
+    temp_seg = np.where(temp_seg == straight_chair_amgwaw_0_id, 1, 0)
+    plt.imshow(temp_seg)
+    plt.show()
+
+    # Make bbox (xyxy)
+    y, x = np.where(temp_seg == 1)
+
+    bbox = (np.min(x), np.min(y), np.max(x), np.max(y))
+    print(bbox)
+
+    for x in range(bbox[0], bbox[2]):
+        temp_seg[bbox[1], x] = 2
+        temp_seg[bbox[3], x] = 2
+
+    for y in range(bbox[1], bbox[3]):
+        temp_seg[y, bbox[0]] = 2
+        temp_seg[y, bbox[2]] = 2
+
+    plt.imshow(temp_seg)
+    plt.show()
+
+    assert False
+    """
+    
     obstacle_map.update(lidar_sensor, scan)
+    
+    iterations = 0
 
     # Update POMDP
         # 1. Loop over all object types
         # 2. Get all visible voxels for that object types resolution
         # 3. Get predicted value (obs)
         # 4. Call update for that object types belief
+    found_obj = False
+    pitch, roll, yaw = env.robots[0].get_rpy()
     for obj_tp in pomdp.bel.keys():
         # Get predictions for all voxels based on observations
-        vox_preds = get_vox_preds(camera_pos, camera_ori, camera_rpy, pomdp.bel[obj_tp], obj_tp, state['robot0'], dino_model, config, obstacle_map, camera_intrinsic_mat)
+        vox_preds, found_obj = get_vox_preds(yaw, camera_pos, camera_ori, camera_rpy, pomdp.bel[obj_tp], obj_tp, state['robot0'], info, dino_model, config, obstacle_map, camera_intrinsic_mat, camera_params, iteration=iterations)
         pomdp.bel[obj_tp].update(vox_preds)
+            
+        if found_obj:
+            found_obj = False
 
 
         # Do the same for each feature
         for feature in pomdp.bel[obj_tp].feature_bels.keys():
             # Get predictions for all voxels based on observations
-            vox_preds = get_vox_preds(camera_pos, camera_ori, camera_rpy, pomdp.bel[obj_tp], obj_tp, state['robot0'], dino_model, config, obstacle_map, camera_intrinsic_mat, feature)
+            vox_preds, found_obj = get_vox_preds(yaw, camera_pos, camera_ori, camera_rpy, pomdp.bel[obj_tp], obj_tp, state['robot0'], info, dino_model, config, obstacle_map, camera_intrinsic_mat, camera_params, feature, iteration=iterations)
             pomdp.bel[obj_tp].update(vox_preds, feature=feature)
 
     reached_way_point = True
@@ -213,14 +409,20 @@ def pomdp_exec_loop(env, pomdp, obstacle_map, config, dino_model):
 
     planned_path = []
 
-    iterations = 0
-
     replans = 0
 
     # Run until complete
-    done, symbolic_info = pomdp.enough_info()
+    done, symbolic_info = pomdp.enough_info(iterations)
     print("In POMDP Exec loop -- DONE?: ", done)
+
+    sim_time = 0
+
     while not done:
+        if iterations != 0:
+            done, symbolic_info = pomdp.enough_info(iterations)
+            if done:
+                return symbolic_info, sim_time
+        
         pos, ori = env.robots[0].get_position_orientation()
         pitch, roll, yaw = env.robots[0].get_rpy()
         print("Robot Pos/Angle: ", pos, yaw)
@@ -240,7 +442,11 @@ def pomdp_exec_loop(env, pomdp, obstacle_map, config, dino_model):
                 i += 1
                 action = OrderedDict([('robot0', [-1 , 0])])
                 print("Executing: ", action)
-                state, _, _, _ = env.step(action)
+                start_step_time = time.time()
+                state, _, _, info = env.step(action)
+                end_step_time = time.time()
+
+                sim_time += (end_step_time - start_step_time)
             
             time_steps_no_movement = 0
             last_pos = pos
@@ -250,9 +456,9 @@ def pomdp_exec_loop(env, pomdp, obstacle_map, config, dino_model):
             replans = 0
             next_carrot = None
             # Check if Done
-            done, symbolic_info = pomdp.enough_info()
+            done, symbolic_info = pomdp.enough_info(iterations)
             if done:
-                continue
+                return symbolic_info, sim_time
 
             # Send some zeros to stop movement
             i = 0
@@ -260,14 +466,18 @@ def pomdp_exec_loop(env, pomdp, obstacle_map, config, dino_model):
                 i += 1
                 action = OrderedDict([('robot0', [0 , 0])])
                 print("Executing: ", action)
-                state, _, _, _ = env.step(action)
+                start_step_time = time.time()
+                state, _, _, info = env.step(action)
+                end_step_time = time.time()
+
+                sim_time += (end_step_time - start_step_time)
 
             pos = env.robots[0].get_position()
             pitch, roll, yaw = env.robots[0].get_rpy()
             print("Robot Pos/Angle: ", pos, yaw)
 
             print("Entering MCTS Planner")
-            way_point = MCTS_planner_exec(pomdp, obstacle_map, config, pos, yaw)
+            way_point, astar_path = MCTS_planner_exec(pomdp, obstacle_map, config, pos, yaw, iterations)
 
             planned_path, goal_yaw = get_path(pos, way_point, obstacle_map)
 
@@ -275,15 +485,48 @@ def pomdp_exec_loop(env, pomdp, obstacle_map, config, dino_model):
 
         if planned_path != None and planned_path != []:
             if config['planner_params']['teleport']:
-                print("Entering Low Level Planner, Next Waypoint: ", planned_path[0][0], planned_path[0][1])
-                print("Length of Planned Path: ", len(planned_path))
-                
+                # Get Goal
+                cur_node = way_point
+                while len(cur_node.children) > 0:
+                    best_child = cur_node.children[0]
+                    highest_reward = best_child.total_rewards / best_child.visits
+
+                    for child in cur_node.children:
+                        if (child.total_rewards / best_child.visits) > highest_reward:
+                            highest_reward = best_child.total_rewards / best_child.visits
+                            best_child = child
+
+                    cur_node = best_child
+
+                # Get next a star waypoint to teleport to
+                max_found_dist = 0
+                max_idx = 0
+                max_dist = 0.5
+                best_point = None
+
+                idx = 0
+                for point in astar_path:
+                    dist = np.sqrt((pos[0] - point[0]) ** 2 + (pos[1] - point[1])**2)
+                    if dist < max_dist and idx >= max_idx and dist > max_found_dist:
+                        max_found_dist = dist
+                        max_idx = idx
+                        best_point = point
+
+                # Check if reached end waypoint
+                if point[0] == cur_node.loc.x and point[1] == cur_node.loc.y:
+                    reached_waypoint = True
+
+                goal_node = np.array([point[0], point[1]])
+                goal_yaw = np.arctan2(pos[1] - goal_node[1], pos[0] - goal_node[0])
+
+                print("Teleporting to: ", goal_node[0], goal_node[1])
+                print("Yaw: ", goal_yaw)
                 action = OrderedDict([('robot0', [0, 0])])
-                rot_to_send = Rotation.from_euler('xyz', [pitch, roll, goal_yaw], degrees=False)
+                pitch, roll, yaw = env.robots[0].get_rpy()
+                rot_to_send = Rotation.from_euler('xyz', [og_pitch, og_roll, goal_yaw], degrees=False)
                 ori_to_send = rot_to_send.as_quat()
-                env.robots[0].set_position_orientation([planned_path[0][0], planned_path[0][1], pos[2]], ori_to_send)
-                planned_path.pop(0)
-                reached_way_point = (len(planned_path) == 0)
+                env.robots[0].set_position_orientation([goal_node[0], goal_node[1], pos[2]], ori_to_send)
+                #reached_way_point = True
             else:
                 if planned_path == -1:
                     planned_path = None
@@ -317,7 +560,8 @@ def pomdp_exec_loop(env, pomdp, obstacle_map, config, dino_model):
                 #action, reached_way_point, planned_path = low_level_planner_exec(planned_path, pos, yaw, goal_yaw, config)
             time_steps_since_MCTS += 1
 
-            reached_way_point = eval_reached_way_point(goal_pos, goal_yaw, pos, yaw, config)
+            if not config['planner_params']['teleport']:
+                reached_way_point = eval_reached_way_point(goal_pos, goal_yaw, pos, yaw, config)
         else:
             action = OrderedDict([('robot0', [0 , 0])])
             reached_way_point = True
@@ -327,13 +571,24 @@ def pomdp_exec_loop(env, pomdp, obstacle_map, config, dino_model):
         
 
         print("Executing: ", action)
-        state, _, _, _ = env.step(action)
+        start_step_time = time.time()
+        state, _, _, info = env.step(action)
+        
+        # TEMP #####
+        state, _, _, info = env.step(action)
+        state, _, _, info = env.step(action)
+        state, _, _, info = env.step(action)
+        state, _, _, info = env.step(action)
+        end_step_time = time.time()
+
+        sim_time += (end_step_time - start_step_time)
 
         camera_pos, camera_ori = env.robots[0]._sensors['robot0:eyes:Camera:0'].get_position_orientation()
         camera_rpy = env.robots[0]._sensors['robot0:eyes:Camera:0'].get_rpy()
         # Offset camera angle correctly
         camera_rpy[2] += np.deg2rad(90)
         camera_intrinsic_mat = env.robots[0]._sensors['robot0:eyes:Camera:0'].intrinsic_matrix
+        camera_params = env.robots[0]._sensors['robot0:eyes:Camera:0'].camera_parameters
 
         # Update Obstacle map 
         lidar_sensor = env.robots[0]._sensors['robot0:scan_link:Lidar:0']
@@ -342,21 +597,28 @@ def pomdp_exec_loop(env, pomdp, obstacle_map, config, dino_model):
 
         obstacle_map.update(lidar_sensor, scan)
 
+        pitch, roll, yaw = env.robots[0].get_rpy()
+
         # Update POMDP
             # 1. Loop over all object types
             # 2. Get all visible voxels for that object types resolution
             # 3. Get predicted value (obs)
             # 4. Call update for that object types belief
+        found_obj = False
         for obj_tp in pomdp.bel.keys():
             # Get predictions for all voxels based on observations
-            vox_preds = get_vox_preds(camera_pos, camera_ori, camera_rpy, pomdp.bel[obj_tp], obj_tp, state['robot0'], dino_model, config, obstacle_map, camera_intrinsic_mat)
+            vox_preds, found_obj = get_vox_preds(yaw, camera_pos, camera_ori, camera_rpy, pomdp.bel[obj_tp], obj_tp, state['robot0'], info, dino_model, config, obstacle_map, camera_intrinsic_mat, camera_params, iteration=iterations)
             pomdp.bel[obj_tp].update(vox_preds)
+        
+            if found_obj:
+                found_obj = False
+                np.save(f'/robodata/user_data/npatt/OmniGibson/debug/updated_beliefs/{obj_tp}_{iterations}.npy', pomdp.bel[obj_tp].p)
 
 
             # Do the same for each feature
             for feature in pomdp.bel[obj_tp].feature_bels.keys():
                 # Get predictions for all voxels based on observations
-                vox_preds = get_vox_preds(camera_pos, camera_ori, camera_rpy, pomdp.bel[obj_tp], obj_tp, state['robot0'], dino_model, config, obstacle_map, camera_intrinsic_mat, feature)
+                vox_preds, found_obj = get_vox_preds(yaw, camera_pos, camera_ori, camera_rpy, pomdp.bel[obj_tp], obj_tp, state['robot0'], info, dino_model, config, obstacle_map, camera_intrinsic_mat, camera_params, feature, iteration=iterations)
                 pomdp.bel[obj_tp].update(vox_preds, feature=feature)
 
 
@@ -376,5 +638,8 @@ def pomdp_exec_loop(env, pomdp, obstacle_map, config, dino_model):
                 plt.savefig('cur_bel.png')
 
         iterations += 1
+        found_obj = False
 
-    return symbolic_info
+        print("Done Exec Loop: ", iterations)
+
+    return symbolic_info, sim_time

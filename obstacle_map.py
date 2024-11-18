@@ -56,7 +56,7 @@ class ObstacleMap():
                 # My transforms ought to work here but they don't
                 # I will need to remove the ground plane and robot LIDAR self collisions from this as well            
                 p = self.obstacles[xy_obstacle_map[0], xy_obstacle_map[1]]
-                log_p = np.log((p+eps)/(1-p))
+                log_p = np.log((p+eps)/(1-p+eps))
 
                 inv_sensor_model = np.log((1-eps)/(eps))
 

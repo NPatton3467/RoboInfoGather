@@ -17,7 +17,7 @@ class Loc():
         self.y = y
         self.theta = theta
 
-"""class Action(Enum):
+class Action(Enum):
     M_LEFT = 1
     M_RIGHT = 2
     M_DOWN = 3
@@ -35,14 +35,15 @@ class Loc():
     L_W = 15
     L_NW = 16
     OBS = 17
-"""
 
+"""
 class Action(Enum):
     M_FORWARD = 0
     M_BACKWARD = 1
     R_CCW = 2
     R_CW = 3
     OBS = 4
+"""
 
 class MCTS_Tree_Node():
     def __init__(self, loc, obstacle_map, num_prev_obs, max_obs, config,
@@ -81,6 +82,18 @@ class MCTS_Tree_Node():
             if not self.legal(act) and self.is_legal:
                 self.max_children -= 1
 
+    def print_node(self, depth=0):
+        delim_str = ""
+
+        if depth > 2:
+            return
+
+        for i in range(depth):
+            delim_str += '| '
+
+        print(delim_str, "Visits: ", self.visits, " Total Reward: ", self.total_rewards, " Inbound Act: ", self.inbound_act, " Number of children: ", len(self.children))
+        for child in self.children:
+            child.print_node(depth+1)
 
     def unvisited_child(self):
         avail_act_list = []
@@ -128,7 +141,16 @@ class MCTS_Tree_Node():
     def eval_terminal(self):
         # TODO THINK ABOUT THIS MORE
         #return (self.num_prev_obs == (self.max_obs - 1)) and self.inbound_act == Action.OBS
-        return self.inbound_act == Action.OBS
+        terminal = ((self.inbound_act == Action.OBS) )# or
+                    #self.inbound_act == Action.L_N) or
+                    #self.inbound_act == Action.L_NE) or
+                    #self.inbound_act == Action.L_E) or
+                    #self.inbound_act == Action.L_SE) or
+                    #self.inbound_act == Action.L_S) or
+                    #self.inbound_act == Action.L_SW) or
+                    #self.inbound_act == Action.L_W) or
+                    #self.inbound_act == Action.L_NW))
+        return terminal
 
     def legal(self, act):
         # Allow "illegal" actions if robot is stuck in inflated obstacle zone
@@ -156,22 +178,67 @@ class MCTS_Tree_Node():
         return True
 
     def get_loc(self, act):
-        """if act == Action.M_LEFT:
-            return Loc(self.loc.x - 1, self.loc.y, self.loc.theta)
+        j_size = self.config['planner_params']['mcts_step_length']
+        if act == Action.M_LEFT:
+            cur_map_loc = world_to_map([self.loc.x, self.loc.y], self.obstacle_map.resolution, self.obstacle_map.size)
+            cur_map_loc[0] = int(cur_map_loc[0] - j_size/self.obstacle_map.resolution)
+
+            new_real_loc_xy = map_to_world(cur_map_loc, self.obstacle_map.resolution, self.obstacle_map.size)
+
+            return Loc(new_real_loc_xy[0], new_real_loc_xy[1], self.loc.theta)
         elif act == Action.M_RIGHT:
-            return Loc(self.loc.x + 1, self.loc.y, self.loc.theta)
+            cur_map_loc = world_to_map([self.loc.x, self.loc.y], self.obstacle_map.resolution, self.obstacle_map.size)
+            cur_map_loc[0] = int(cur_map_loc[0] + j_size/self.obstacle_map.resolution)
+
+            new_real_loc_xy = map_to_world(cur_map_loc, self.obstacle_map.resolution, self.obstacle_map.size)
+
+            return Loc(new_real_loc_xy[0], new_real_loc_xy[1], self.loc.theta)
         elif act == Action.M_DOWN:
-            return Loc(self.loc.x, self.loc.y - 1, self.loc.theta)
+            cur_map_loc = world_to_map([self.loc.x, self.loc.y], self.obstacle_map.resolution, self.obstacle_map.size)
+            cur_map_loc[1] = int(cur_map_loc[1] - j_size/self.obstacle_map.resolution)
+
+            new_real_loc_xy = map_to_world(cur_map_loc, self.obstacle_map.resolution, self.obstacle_map.size)
+
+            return Loc(new_real_loc_xy[0], new_real_loc_xy[1], self.loc.theta)
         elif act == Action.M_UP:
-            return Loc(self.loc.x, self.loc.y + 1, self.loc.theta)
+            cur_map_loc = world_to_map([self.loc.x, self.loc.y], self.obstacle_map.resolution, self.obstacle_map.size)
+            cur_map_loc[1] = int(cur_map_loc[1] + j_size/self.obstacle_map.resolution)
+
+            new_real_loc_xy = map_to_world(cur_map_loc, self.obstacle_map.resolution, self.obstacle_map.size)
+
+            return Loc(new_real_loc_xy[0], new_real_loc_xy[1], self.loc.theta)
         elif act == Action.M_LEFTDOWN:
-            return Loc(self.loc.x - 1, self.loc.y - 1, self.loc.theta)
+            cur_map_loc = world_to_map([self.loc.x, self.loc.y], self.obstacle_map.resolution, self.obstacle_map.size)
+            cur_map_loc[0] = int(cur_map_loc[0] - j_size/self.obstacle_map.resolution)
+            cur_map_loc[1] = int(cur_map_loc[1] - j_size/self.obstacle_map.resolution)
+
+            new_real_loc_xy = map_to_world(cur_map_loc, self.obstacle_map.resolution, self.obstacle_map.size)
+
+            return Loc(new_real_loc_xy[0], new_real_loc_xy[1], self.loc.theta)
         elif act == Action.M_LEFTUP:
-            return Loc(self.loc.x - 1, self.loc.y + 1, self.loc.theta)
+            cur_map_loc = world_to_map([self.loc.x, self.loc.y], self.obstacle_map.resolution, self.obstacle_map.size)
+            cur_map_loc[0] = int(cur_map_loc[0] - j_size/self.obstacle_map.resolution)
+            cur_map_loc[1] = int(cur_map_loc[1] + j_size/self.obstacle_map.resolution)
+
+            new_real_loc_xy = map_to_world(cur_map_loc, self.obstacle_map.resolution, self.obstacle_map.size)
+
+            return Loc(new_real_loc_xy[0], new_real_loc_xy[1], self.loc.theta)
         elif act == Action.M_RIGHTDOWN:
-            return Loc(self.loc.x + 1, self.loc.y - 1, self.loc.theta)
+            cur_map_loc = world_to_map([self.loc.x, self.loc.y], self.obstacle_map.resolution, self.obstacle_map.size)
+            cur_map_loc[0] = int(cur_map_loc[0] + j_size/self.obstacle_map.resolution)
+            cur_map_loc[1] = int(cur_map_loc[1] - j_size/self.obstacle_map.resolution)
+
+            new_real_loc_xy = map_to_world(cur_map_loc, self.obstacle_map.resolution, self.obstacle_map.size)
+
+            return Loc(new_real_loc_xy[0], new_real_loc_xy[1], self.loc.theta)
         elif act == Action.M_RIGHTUP:
-            return Loc(self.loc.x + 1, self.loc.y + 1, self.loc.theta)
+            cur_map_loc = world_to_map([self.loc.x, self.loc.y], self.obstacle_map.resolution, self.obstacle_map.size)
+            cur_map_loc[0] = int(cur_map_loc[0] + j_size/self.obstacle_map.resolution)
+            cur_map_loc[1] = int(cur_map_loc[1] + j_size/self.obstacle_map.resolution)
+
+            new_real_loc_xy = map_to_world(cur_map_loc, self.obstacle_map.resolution, self.obstacle_map.size)
+
+            return Loc(new_real_loc_xy[0], new_real_loc_xy[1], self.loc.theta)
         elif act == Action.L_N:
             return Loc(self.loc.x, self.loc.y, math.radians(0))
         elif act == Action.L_NE:
@@ -189,9 +256,10 @@ class MCTS_Tree_Node():
         elif act == Action.L_NW:
             return Loc(self.loc.x, self.loc.y, math.radians(315))
         elif act == Action.OBS:
-            return Loc(self.loc.x, self.loc.y, self.loc.theta)"""
+            return Loc(self.loc.x, self.loc.y, self.loc.theta)
 
 
+        """
         # Estimate location based on actions
         # Rotations are ~15 degrees
         # Motition is 0.5m
@@ -248,6 +316,8 @@ class MCTS_Tree_Node():
                 print("New Node's Location: ", new_loc.x, new_loc.y, new_loc.theta)
             return new_loc
 
+        """
+
 
 
     def update(self, reward):
@@ -286,7 +356,8 @@ class MCTS_Planner():
         self.obstacle_map = obstacle_map
 
         self.max_time = self.config['planner_params']['max_time']
-        self.epsilon = epsilon
+        #self.epsilon = epsilon
+        self.epsilon = self.config['planner_params']['epsilon']
 
         self.rollout_policy_tp = rollout_policy
         self.max_rollout_depth = max_rollout_depth
@@ -308,6 +379,9 @@ class MCTS_Planner():
             print("Child Act: ", child.inbound_act, " Reward: ", child.total_rewards, " Visits: ", child.visits)
             print("Child Location: ", child.loc.x, child.loc.y, child.loc.theta)
 
+        # Print Tree
+        self.root.print_node()
+
         return self.best_child(self.root)
 
     def traverse(self, node):
@@ -323,13 +397,18 @@ class MCTS_Planner():
         terminal = node.terminal
         depth = 0
         reward = 0
+        # Calculate reward for all object types
+        for obj_tp in self.pomdp.reward_funcs.keys():
+            reward += self.pomdp.reward_funcs[obj_tp].eval(self.pomdp.bel[obj_tp], self.obstacle_map, self.root, node)
+        
         while not terminal and depth < self.max_rollout_depth:
             node = self.rollout_policy(node)
             terminal = node.terminal
             
             # Calculate reward for all object types
             for obj_tp in self.pomdp.reward_funcs.keys():
-                reward += (0.99 ** depth) * self.pomdp.reward_funcs[obj_tp].eval(self.pomdp.bel[obj_tp], self.obstacle_map, self.root, node)
+                #reward += (0.99 ** depth) * self.pomdp.reward_funcs[obj_tp].eval(self.pomdp.bel[obj_tp], self.obstacle_map, self.root, node)
+                reward += self.pomdp.reward_funcs[obj_tp].eval(self.pomdp.bel[obj_tp], self.obstacle_map, self.root, node)
             
             depth += 1
 
@@ -376,6 +455,7 @@ class MCTS_Planner():
     def backpropogate(self, node, reward):
         # Return at root
         if node.parent == None:
+            node.update(reward)
             return
         
         node.update(reward)
@@ -400,11 +480,17 @@ class MCTS_Planner():
         return mean + explore_bonus
 
     def best_child(self, node):
-        most_visits = 0
+        #most_visits = 0
+        #best_child = node.children[0]
+        #for child in node.children:
+        #    if child.visits > most_visits and child.inbound_act != Action.OBS:
+        #        most_visits = child.visits
+        #        best_child = child
+        best_reward = 0
         best_child = node.children[0]
         for child in node.children:
-            if child.visits > most_visits and child.inbound_act != Action.OBS:
-                most_visits = child.visits
+            if (child.total_rewards / child.visits) > best_reward and child.inbound_act != Action.OBS:
+                best_reward = child.total_rewards / child.visits
                 best_child = child
 
         print("Best Child Location: ", best_child.loc.x, best_child.loc.y, best_child.loc.theta)

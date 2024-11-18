@@ -34,19 +34,28 @@ def get_map_params(obj_tp, map_original_size, map_original_resolution):
     )
 
     # Extract grid size
-    response = response.choices[0].message.content
-    grid_size_idx = response.find('grid_size')
-    response = response[grid_size_idx:]
-    response = response.lstrip('grid_size = ')
-    meters_idx = response.find('meters')
-    response = response[:meters_idx].rstrip(' ')
-    map_resolution = float(response)
+    gresponse = response.choices[0].message.content
+    grid_size_idx = gresponse.find('grid_size')
+    gresponse = gresponse[grid_size_idx:]
+    gresponse = gresponse.lstrip('grid_size = ')
+    meters_idx = gresponse.find('meters')
+    gresponse = gresponse[:meters_idx].rstrip(' ')
+    map_resolution = float(gresponse)
+    
+    # Extract vertical grid size
+    vresponse = response.choices[0].message.content
+    height_idx = vresponse.find('height')
+    vresponse = vresponse[height_idx:]
+    vresponse = vresponse.lstrip('height = ')
+    meters_idx = vresponse.find('meters')
+    vresponse = vresponse[:meters_idx].rstrip(' ')
+    z_resolution = float(vresponse)
 
     map_size = map_size = int(
         map_original_size * map_original_resolution / map_resolution
     )
 
-    return {'res' : map_resolution, 'og_res' : map_original_resolution, 'size' : map_size, 'og_size' : map_original_size}
+    return {'res' : map_resolution, 'og_res' : map_original_resolution, 'size' : map_size, 'og_size' : map_original_size, 'z_res' : z_resolution}
 
 def world_to_map(xy, map_resolution, map_size):
     return np.flip((np.array(xy) / map_resolution + map_size / 2.0)).astype(np.int)
@@ -61,6 +70,7 @@ def get_trav_map(maps_path, floor, resolution, og_resolution):
         """
 
         if not os.path.exists(maps_path):
+            assert False
             log.warning("trav map does not exist: {}".format(maps_path))
             return
 

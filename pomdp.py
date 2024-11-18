@@ -4,9 +4,17 @@ from RoboInfoGather.map_utils import *
 
 from matplotlib import pyplot as plt
 
+import copy
+import math
+import torch
+
 class POMDP():
     def __init__(self, query, robot_init_loc, obj_tp_list, trav_map_og_size, trav_map_og_res, configs):
+        # Stopping criteria type
+        self.explore_stop = configs['bel_params']['explore_stop']
+
         self.prior_beliefs = [] # For AKLD calculation
+        self.prior_beliefs_quick = {}
         self.query = query # Need to keep around for enough info check
         self.loc = robot_init_loc
         self.configs = configs
@@ -82,10 +90,9 @@ class POMDP():
         return symbolic_info
         
 
-    def enough_info(self):
-        self.prior_beliefs.append(self.bel)
-
-        symbolic_info = self.make_symbolic()
+    def compute_akld(self, iterations):
+        if iteration % self.configs['bel_params']['akld_append_interval'] == 0:
+            self.prior_beliefs.append(copy.deepcopy(self.bel))
 
         # Pop if over length
         while len(self.prior_beliefs) > self.configs['bel_params']['akld_hist_len']:
@@ -96,14 +103,36 @@ class POMDP():
         akld = 0
         for obj_tp in self.bel.keys():
             for i in range(k):
-                for j in range(k):
+                for j in range(i+1, k):
                     akld += self.kl(self.prior_beliefs[i][obj_tp].p, self.prior_beliefs[j][obj_tp].p)
 
-        if k > 1:
+
+        if k == self.configs['bel_params']['akld_hist_len']:
             akld = akld / (k * (k-1))
+            print("AKLD: ", akld)
         else:
             akld = -1
 
+        return akld
+
+    def compute_average_entropy(self):
+        avg_entropy = 0.0
+
+        for key in self.bel.keys():
+            p = self.bel[key].p
+
+            cur_p_ent = np.where((p > 0) & (p < 1), p * np.log(p) + (1-p)*np.log(1-p), 0)
+            print(np.min(cur_p_ent))
+            num_valid = np.sum(np.where((p > 0) & (p < 1), 1, 0))
+            cur_p_avg_ent = np.sum(cur_p_ent) / num_valid
+
+            avg_entropy += (cur_p_avg_ent / len(self.bel.keys()))
+
+        return -1 * avg_entropy
+
+    def enough_info(self, iteration):
+        symbolic_info = self.make_symbolic()
+        
         # Check if enough found in symbolic execution
         found_all_obj = True
         current_symbolic_query = self.query.execute(symbolic_info)
@@ -111,16 +140,36 @@ class POMDP():
             num_found = len(current_symbolic_query[obj_tp])
             if num_found < self.bel[obj_tp].num or self.bel[obj_tp].num == -1:
                 found_all_obj = False
+        
+        if self.explore_stop == "AKLD":
+            akld = self.compute_akld(iterations)
+            # Check akld and num found
+            if (akld > 0 and akld <= self.configs['bel_params']['akld_stop']) or found_all_obj:
+                print("Done POMDP Execution -- AKLD: ", akld, " Num Found: ", num_found, " Required Number to Find: ", self.bel[obj_tp].num, " found_all_obj: ", found_all_obj)
+                return True, symbolic_info
 
-        # Check akld and num found
-        if (akld > 0 and akld <= self.configs['bel_params']['akld_stop']) or found_all_obj:
-            print("Done POMDP Execution -- AKLD: ", akld, " Num Found: ", num_found, " Required Number to Find: ", self.bel[obj_tp].num, " found_all_obj: ", found_all_obj)
-            return True, symbolic_info
+        elif self.explore_stop == "ENTROPY":
+            avg_ent = self.compute_average_entropy()
+
+            if avg_ent <= self.configs['bel_params']['avg_ent_stop'] or found_all_obj:
+                print("Done POMDP Execution -- ENTROPY: ", avg_ent, " Num Found: ", num_found, " Required Number to Find: ", self.bel[obj_tp].num, " found_all_obj: ", found_all_obj)
+                return True, symbolic_info
+
 
         return False, symbolic_info
 
     def kl(self, p, q):
-        return np.sum(np.where(p != 0, p*np.log(p/q), 0))
+        # KL is sum over all possibilities of rv X
+        # Here obj either exists or doesn't so p(x = 1) = 1 - p(x=0)
+        kl1 = np.sum(np.where((p > 0) & (q > 0), p*np.log(p/q), 0))
+        kl0 = np.sum(np.where(((1-p) > 0) & ((1-q) > 0), (1-p)*np.log((1-p)/(1-q)), 0))
+
+        kl = kl0+kl1
+
+        #print("KL0: ", kl0, " KL1: ", kl1, " KL: ", kl)
+        #print("Equal?: ", (p==q).all())
+
+        return kl
 
     def visualize(self, rob_pos):
         for obj_tp in self.figures:

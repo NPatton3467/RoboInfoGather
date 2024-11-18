@@ -10,6 +10,8 @@ import torch
 #torch.cuda.is_available = lambda : False
 
 import argparse
+import pickle
+import time
 
 def main(nl):
     """
@@ -52,7 +54,8 @@ def main(nl):
     CONFIG_PATH = os.path.join("/robodata/user_data/npatt/OmniGibson/GroundingDINO/groundingdino/config/GroundingDINO_SwinT_OGC.py")
     WEIGHTS_PATH = os.path.join("/robodata/user_data/npatt/OmniGibson/GroundingDINO/weights/groundingdino_swint_ogc.pth")
     dino_model = load_model(CONFIG_PATH, WEIGHTS_PATH)
-    dino_model = dino_model.to(torch.device('cuda'))
+    dino_device = 'cuda'
+    dino_model = dino_model.to(torch.device(dino_device))
 
 
     # Setup obstacle map
@@ -82,22 +85,27 @@ def main(nl):
 
     # Execute each query
     query_results = []
+    sim_time = 0
     for query in prog.expressions:
         pos = env.robots[0].get_position()
         yaw = env.robots[0].get_rpy()[2]
         pomdp = gen_pomdp_from_query(query=query, pos=pos, yaw=yaw, trav_map_og_size=size, trav_map_og_res=resolution, configs=config)
 
-        symbolic_info = pomdp_exec_loop(env, pomdp, obstacle_map, config, dino_model)
+        symbolic_info, recent_sim_time = pomdp_exec_loop(env, pomdp, obstacle_map, config, dino_model)
+        sim_time += recent_sim_time
 
         query_results.append(query.execute(symbolic_info))
 
-    # Always close the environment at the end
-    env.close()
+        # Save pomdp
+        with open(f'pomdp_class_{pos}', 'wb') as outp:
+            pickle.dump(pomdp, outp, pickle.HIGHEST_PROTOCOL)
 
-    return query_reults
+
+    return query_results, env, sim_time
 
 
 if __name__ == '__main__':
+    start_time = time.time()
     parser = argparse.ArgumentParser('info_gather_main')
     parser.add_argument('nl_query', type=str)
 
@@ -105,4 +113,14 @@ if __name__ == '__main__':
 
     nl = args.nl_query
 
-    results = main(nl)
+    results, env, sim_time = main(nl)
+
+    end_time = time.time()
+
+    print("Done Execution... Results:")
+    print(results)
+    print(f'TIME: {end_time-start_time}s')
+    print(f'SIM_TIME: {sim_time}s')
+    
+    # Always close the environment at the end
+    env.close()

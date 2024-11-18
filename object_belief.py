@@ -8,13 +8,19 @@ class ObjTpBel():
         self.num = num # Num objects to be found, If None -> unbounded
         self.threshold = threshold # Existence threshold
         self.map_params = map_params
+        print("PATH: ", configs['scene']['trav_map_path'])
+        print("FLOOR: ", configs['scene']['floor'])
+        print("RES: ", map_params['res'])
+        print("OG RES: ", map_params['og_res'])
         self.trav_map = get_trav_map(configs['scene']['trav_map_path'], configs['scene']['floor'], map_params['res'], map_params['og_res'])
         self.configs = configs
         self.relevant_features = relevant_features
         
         #self.p = np.copy(self.trav_map)
+
         self.p = np.ones_like(self.trav_map)
         self.p = self.p * 0.5
+        self.p = np.where(self.trav_map == 0, -1, self.p)
 
         print(f'Belief Created with (xdim, y_dim) = ({self.p.shape})')
 
@@ -22,7 +28,7 @@ class ObjTpBel():
         #self.p = np.where((self.p == 255), 0.5, 0)
 
         # Need to replicate vertically
-        self.z_dim = int(self.configs['rf_params']['map_height'] / self.map_params['res'])
+        self.z_dim = int(self.configs['rf_params']['map_height'] / self.map_params['z_res'])
         temp_p = [self.p for i in range(self.z_dim)]
         self.p = np.stack(temp_p, axis=2)
 
@@ -30,6 +36,9 @@ class ObjTpBel():
 
         # For copying later if we get new features to evaluate
         self.backup_p = np.copy(self.p)
+
+        # For object detection matching
+        self.clusters = []
 
         # Belief over features
         self.feature_bels = {}
@@ -60,8 +69,7 @@ class ObjTpBel():
     def update(self, obs, eps=1e-6, feature=None):
         if feature is None:
             # Update Belief using Binary Bayes Filter
-            # CAN THIS BE DONE WITHOUT DOING EACH VOXEL INDIVIDUALLY? -- yes
-            log_p = np.log(self.p/(1-self.p))
+            log_p = np.where(self.p > 0, np.log((self.p+eps)/(1-self.p+eps)), 0)
 
             print("p min/max", np.min(self.p), "/", np.max(self.p))
             print("obs min/max", np.min(obs), "/", np.max(obs))
@@ -72,17 +80,29 @@ class ObjTpBel():
             new_log_p = log_p + inv_sensor_model
 
             self.p = 1 - (1/(1+np.exp(new_log_p)))
+
+            if np.isnan(self.p).any():
+                print("Belief:")
+                print(self.p)
+                print("Observation:")
+                print(obs)
+                assert False
             
             del(inv_sensor_model)
             del(new_log_p)
             del(log_p)
+
+            extended_trav_map = np.expand_dims(self.trav_map, axis=-1)
+            extended_trav_map = np.tile(extended_trav_map, (1,1, self.p.shape[2]))
+            self.p = np.where(extended_trav_map == 0, -1, self.p)
+
             print("Done Update")
         else:
             print("Feature: ", feature)
             assert False # This needs to change to reflect aribitrary features (e.g. colour will have values of "red" here)
             p = self.feature_bels[feature]
 
-            log_p = np.log(p/(1-p))
+            log_p = np.log((p+eps)/(1-p+eps))
 
             inv_sensor_model = np.where(obs != -1, np.log((obs+eps)/(1-obs+eps)), 0)
 

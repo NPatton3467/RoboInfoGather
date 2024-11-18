@@ -60,6 +60,9 @@ def a_star(goal_pos, state, obstacle_map):
     start_loc = world_to_map(np.array([state['pos'][0], state['pos'][1]]), new_res, new_size)
     goal_loc = world_to_map(np.array([goal_pos[0], goal_pos[1]]), new_res, new_size)
 
+    goal_loc[0] = max(0, min(goal_loc[0], new_size))
+    goal_loc[1] = max(0, min(goal_loc[1], new_size))
+
     if local_obs_map[goal_loc[0], goal_loc[1]]:
         return []
 
