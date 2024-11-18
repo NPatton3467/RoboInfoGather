@@ -18,6 +18,6 @@ print(sub_where2.pretty_str())
 print(ex_2.pretty_str())
 
 
-# Where is my tallest cup 
+# Where is my tallest cup
 ex_3 = Map('Cup', 'location', Query('Cup', WhereClause('max', 'cup', scalar_feature='height')))
 print(ex_3.pretty_str())
