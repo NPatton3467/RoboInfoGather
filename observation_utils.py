@@ -8,15 +8,15 @@ from RoboInfoGather.MCTS_planner import Loc
 
 #from omnigibson.utils.vision_utils import *
 
-from ram.models import ram
-from ram import inference_ram, inference_tag2text, inference_ram_openset
-from ram import get_transform
+#from ram.models import ram
+#from ram import inference_ram, inference_tag2text, inference_ram_openset
+#from ram import get_transform
 
 from PIL import Image
 
 import torch
 import torchvision.transforms.functional as TF
-from segment_anything import sam_model_registry, SamPredictor
+#from segment_anything import sam_model_registry, SamPredictor
 
 from scipy.spatial.transform import Rotation as R
 import skimage.measure
@@ -236,8 +236,12 @@ def get_fov_from_depth_image(camera_pos, robot_yaw, raw_depth_image, voxel_preds
             while cur_depth < max_depth:
                 world_coords = get_world_coords_from_depth(x, y, cur_depth, camera_pos, robot_yaw, cam_int_mat)
 
+                print("World Coords: ", world_coords)
                 # Set voxel pred location to 0 here
                 v_xy = world_to_map(np.array([world_coords[0],world_coords[1]]), resolution, size)
+
+                print("VXY: ", v_xy)
+                assert False
 
                 if not np.isnan(world_coords[2]):
                     vz = int(world_coords[2] / z_res)
@@ -339,7 +343,7 @@ def get_min_depth(bbox, depth_image):
     print(f"GETMINDEPTH: {y_min}, {y_max}, {x_min}, {x_max}")
     return np.min(depth_image[y_min:y_max, x_min:x_max])
 
-def get_real_coords(bbox, robot_yaw, camera_pos, camera_ori, camera_rpy, depth_image, depth_linear_image, camera_intrinsic_mat, resolution):
+def get_real_coords(bbox, robot_yaw, camera_pos, depth_image, depth_linear_image, camera_intrinsic_mat, resolution):
     """
     This function uses the depth camera pixel values, camera intrinsic matrix, and camera position
     to translate pixel values to real world cooridnates
@@ -432,7 +436,7 @@ def get_real_coords(bbox, robot_yaw, camera_pos, camera_ori, camera_rpy, depth_i
     
     return world_coords[0], world_coords[1], world_coords[2], depth, depth_linear
 
-def get_centroid_coords(bbox, robot_yaw, camera_pos, camera_ori, camera_rpy, depth_image, depth_linear_image, camera_intrinsic_mat, resolution):
+def get_centroid_coords(bbox, robot_yaw, camera_pos, camera_ori, depth_image, depth_linear_image, camera_intrinsic_mat, resolution):
    
     correct = True
 
@@ -445,13 +449,13 @@ def get_centroid_coords(bbox, robot_yaw, camera_pos, camera_ori, camera_rpy, dep
     if bbox[0] - bbox[2]/2 + x_adj < 0:
         correct = False
     l_bbox = np.array([bbox[0] - bbox[2]/2 + x_adj, bbox[1], edge_bbox_width, bbox[3]])
-    lx, ly, lz, ldepth, ldepth_linear = get_real_coords(l_bbox, robot_yaw, camera_pos, camera_ori, camera_rpy, depth_image, depth_linear_image, camera_intrinsic_mat, resolution)
+    lx, ly, lz, ldepth, ldepth_linear = get_real_coords(l_bbox, robot_yaw, camera_pos, camera_ori, depth_image, depth_linear_image, camera_intrinsic_mat, resolution)
 
     # Get the world_coords of the right of the bounding box
     if bbox[0] + bbox[2]/2 - x_adj > depth_linear_image.shape[1]:
         correct = False
     r_bbox = np.array([bbox[0] + bbox[2]/2 - x_adj, bbox[1], edge_bbox_width, bbox[3]])
-    rx, ry, rz, rdepth, rdepth_linear = get_real_coords(r_bbox, robot_yaw, camera_pos, camera_ori, camera_rpy, depth_image, depth_linear_image, camera_intrinsic_mat, resolution)
+    rx, ry, rz, rdepth, rdepth_linear = get_real_coords(r_bbox, robot_yaw, camera_pos, camera_ori, depth_image, depth_linear_image, camera_intrinsic_mat, resolution)
 
     # Estimate centroid -- assume (lx,ly) as reference point, (rx, ry) lies on positive x-axis of reference
     dist = resolution / 2
@@ -467,7 +471,7 @@ def get_centroid_coords(bbox, robot_yaw, camera_pos, camera_ori, camera_rpy, dep
     return n_point[0], n_point[1], (lz+rz)/2.0, ldepth, ldepth_linear, correct
 
 
-def obj_detection(dino_model, obj_tp, state, info, feature, config, camera_params, camera_pos, robot_yaw, use_GD=False, tp='MANUAL'):
+def obj_detection(dino_model, obj_tp, rgb_img, depth_img, feature, config, camera_pos, robot_yaw, use_GD=False, tp='MANUAL'):
     if use_GD:
         img = np.array(state['robot0:eyes:Camera:0']['rgb'])
         #Image should be torch tensor
@@ -1047,7 +1051,7 @@ def check_cluster(x, y, z, belief):
         belief.clusters.append((p, 1))
         return p[0], p[1], p[2]
 
-def get_vox_preds(robot_yaw, camera_pos, camera_ori, camera_rpy, belief, obj_tp, state, info, dino_model, config, obstacle_map, camera_intrinsic_mat, camera_params, feature=None, iteration=0):
+def get_vox_preds(robot_yaw, camera_pos, belief, obj_tp, rgb_image, depth_image, dino_model, config, obstacle_map, camera_intrinsic_mat, feature=None, iteration=0):
     """
     Function to get predicted value of existence at each voxel (for an object type) 
     give observation
@@ -1059,12 +1063,10 @@ def get_vox_preds(robot_yaw, camera_pos, camera_ori, camera_rpy, belief, obj_tp,
     predicted value of object existence.
     """
 
+    print(obstacle_map.shape)
+
     print("Robot Yaw: ", robot_yaw)
 
-    depth_image = state['robot0:eyes:Camera:0']['depth_linear']
-    #plt.imshow(depth_image)
-    #plt.show()
-    
     camera_intrinsic_mat[0][2] = 0.5
     camera_intrinsic_mat[1][2] = 0.5
     camera_intrinsic_mat[0][0] = 0.75 #1 / camera_intrinsic_mat[0][0]
@@ -1076,10 +1078,15 @@ def get_vox_preds(robot_yaw, camera_pos, camera_ori, camera_rpy, belief, obj_tp,
     # Make 0 in all visible voxels
     resolution = belief.map_params['res']
     size = belief.map_params['size']
+
+    print("RESOLUTION IN GET_VOX_PRED: ", resolution)
+    print("AND SIZE: ", size)
+
     z_dim_max = belief.z_dim
     print("Starting FOV")
     voxel_preds = get_fov_from_depth_image(camera_pos, robot_yaw, depth_image, voxel_preds, resolution, belief.map_params['z_res'], size, config, camera_intrinsic_mat)
     print("Got FOV") 
+    assert False
     #camera_angle_mat = quat_to_rot(camera_ori)
     #loc = Loc(camera_pos[0], camera_pos[1], camera_rpy[2])# - np.deg2rad(90))
     #print("Camera Angle", np.arccos(camera_angle_mat[0][0]) - np.deg2rad(90), camera_rpy[2])
@@ -1112,7 +1119,7 @@ def get_vox_preds(robot_yaw, camera_pos, camera_ori, camera_rpy, belief, obj_tp,
 
     # TODO: FIX AFTER SORTED
     
-    real_world_coords, logits = obj_detection(dino_model, obj_tp, state, info, feature, config, camera_params, camera_pos, robot_yaw, tp="MANUAL")
+    real_world_coords, logits = obj_detection(dino_model, obj_tp, rgb_image, depth_image, feature, config, camera_pos, robot_yaw, tp="MANUAL")
     # Get the corresponding voxels
     found_obj = False
     if len(real_world_coords) > 0:

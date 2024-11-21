@@ -19,6 +19,7 @@ Examples:
                 obj_tp="Cup",
                 where_clause=WhereClause(where_tp="max", obj_tp="cup", scalar_feature="height"),
             ),
+            map_tp="feature_enum",
         )
 
   - name: Task 3
@@ -53,4 +54,5 @@ Examples:
                     sub_where_clause=[sub_where1, sub_where2],
                 ),
             ),
+            map_tp="feature_enum",
         )

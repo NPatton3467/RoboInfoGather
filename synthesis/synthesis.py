@@ -3,7 +3,8 @@ import yaml
 import os
 import sys
 from pathlib import Path
-from utils import load_config, openai_generate_completion
+from RoboInfoGather.synthesis.utils import load_config, openai_generate_completion
+from RoboInfoGather.dsl import *
 
 # Get the parent directory of the current file's grandparent
 # This is often done to maintain a consistent import path regardless of where the script is run from
@@ -40,6 +41,7 @@ class SynthesisResult:
         This method assumes the model output contains a Python code definition for an object named 'program'.
         """
         local_scope = {}
+        print(self.model_output)
         try:
             exec(self.model_output, globals(), local_scope)
         except Exception as e:
@@ -79,8 +81,8 @@ class Synthesizer:
         with open(preamble_file_path, "r") as file:
             self.preamble = file.read()
 
-        api_key = os.getenv("OPENAI_API_KEY")
-        assert api_key, "Error: `OPENAI_API_KEY` environment variable is not set."
+        with open('/robodata/user_data/npatt/explore-eqa/RoboInfoGather/openaikey.txt', 'r') as f:
+            api_key = f.read()
 
         self.client = openai.Client(
             api_key=api_key,

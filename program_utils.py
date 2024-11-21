@@ -6,22 +6,24 @@ from RoboInfoGather.observation_utils import *
 from RoboInfoGather.map_utils import *
 from RoboInfoGather.dsl import *
 
+from RoboInfoGather.synthesis.synthesis import *
+
 import copy
 
 from matplotlib import pyplot as plt
 
 def gen_prog_from_nl(nl):
-    # TODO TEMPORARY
-    print("True where clause -- single object")
-    new_where = WhereClause(where_tp='true', obj_tp="Cube")
-    print(new_where.pretty_str())
+    # Call Synth
+    synthesizer = Synthesizer(
+        config_file_path="RoboInfoGather/synthesis/synthesis_config.yaml",
+        example_file_path="RoboInfoGather/synthesis/examples.yaml",
+        preamble_file_path="RoboInfoGather/synthesis/prompt_preamble.txt",
+    )
 
-    new_query = Query(obj_tp="Cube", where_clause=new_where, threshold=0.5)
-
-    new_prog = Prog([new_query])
+    result = synthesizer.generate(nl)
+    new_prog = result.get_program_object()
 
     return new_prog
-    #assert False # Not complete
 
 def get_objects_and_features_helper(component):
     # Start with list and then unify
@@ -43,7 +45,7 @@ def get_objects_and_features_helper(component):
             return [(component.obj_tp, component.scalar_feature, "feature_scalar")]
 
         elif component.where_tp == "spatial_rel":
-            return [(component.obj_tp2, None)]
+            return [(component.obj_tp2, None, None)]
 
         elif component.where_tp == "and":
             obj_feat = get_objects_and_features_helper(component.sub_where_clause[0])
@@ -86,6 +88,7 @@ def get_objects_and_features(query):
 
     # Unify
     obj_feat_dict = {}
+    print(obj_feat_list)
     for obj, feat, tp in obj_feat_list:
         if obj in obj_feat_dict:
             if feat not in obj_feat_dict[obj]:

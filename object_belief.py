@@ -8,11 +8,15 @@ class ObjTpBel():
         self.num = num # Num objects to be found, If None -> unbounded
         self.threshold = threshold # Existence threshold
         self.map_params = map_params
-        print("PATH: ", configs['scene']['trav_map_path'])
-        print("FLOOR: ", configs['scene']['floor'])
         print("RES: ", map_params['res'])
         print("OG RES: ", map_params['og_res'])
-        self.trav_map = get_trav_map(configs['scene']['trav_map_path'], configs['scene']['floor'], map_params['res'], map_params['og_res'])
+        
+
+        #self.trav_map = get_trav_map(configs['scene']['trav_map_path'], configs['scene']['floor'], map_params['res'], map_params['og_res'])
+
+        # TODO: Will want to update trav map as we go
+        self.trav_map = np.zeros((map_params['size'], map_params['size']))
+
         self.configs = configs
         self.relevant_features = relevant_features
         
@@ -99,8 +103,12 @@ class ObjTpBel():
             print("Done Update")
         else:
             print("Feature: ", feature)
-            assert False # This needs to change to reflect aribitrary features (e.g. colour will have values of "red" here)
+            #assert False # This needs to change to reflect aribitrary features (e.g. colour will have values of "red" here)
             p = self.feature_bels[feature]
+
+            print(p)
+            print(obs)
+            print("Max obs: ", np.max(obs))
 
             log_p = np.log((p+eps)/(1-p+eps))
 
@@ -109,6 +117,8 @@ class ObjTpBel():
             new_log_p = np.where(inv_sensor_model != 0, log_p + inv_sensor_model, log_p)
 
             self.feature_bels[feature] = 1 - (1/(1+np.exp(new_log_p)))
+
+            assert False # Done Feature Update?
 
     def get_visualization(self):
         return np.mean(self.p, axis=2)
