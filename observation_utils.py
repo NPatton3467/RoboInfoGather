@@ -630,7 +630,7 @@ def obj_detection(dino_model, obj_tp, rgb_img, depth_img, feature, config, camer
         coords = []
         logits = []
         ret_bboxes = []
-        from omni.syntheticdata.scripts.helpers import get_bbox_3d_corners
+        #from omni.syntheticdata.scripts.helpers import get_bbox_3d_corners
         corners_3d = get_bbox_3d_corners(bboxes)
         for obj_id in obj_ids:
             for i in range(len(bboxes)):

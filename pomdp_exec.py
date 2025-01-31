@@ -13,7 +13,7 @@ import cv2
 from PIL import Image
 import queue
 
-from omnigibson.object_states.pose import Pose
+#from omnigibson.object_states.pose import Pose
 
 from RoboInfoGather.MCTS_planner import *
 from RoboInfoGather.observation_utils import *
