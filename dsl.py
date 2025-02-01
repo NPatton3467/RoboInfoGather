@@ -360,8 +360,18 @@ class WhereClause:
             ret_symb_info[self.obj_tp] = temp_obj
 
         elif self.where_tp == "spatial_rel":
-            assert False # What to do here?
-            return f"{self.spatial_relation}({self.obj_tp}, {self.obj_tp2})"
+            temp_dict1 = {}
+            temp_dict2 = {}
+            for inst1 in symbolic_info[self.obj_tp]:
+                for inst2 in symbolic_info[self.obj_tp2]:
+                    dist = np.norm(symbolic_info[self.obj_tp][inst1]['location'] - 
+                                    symbolic_info[self.obj_tp2][inst2]['location'])
+                    if dist <= asdfasdf:
+                        temp_dict[inst1] = symbolic_info[self.obj_tp][inst1]
+                        temp_dict2[inst2] = symbolic_info[self.obj_tp2][inst2]
+
+            ret_symb_info[self.obj_tp] = temp_dict                
+            ret_symb_info[self.obj_tp2] = temp_dict2
 
         elif self.where_tp == "and":
             ret_symb_info = self.sub_where_clause[0].filter(symbolic_info)

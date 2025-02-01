@@ -70,7 +70,7 @@ class ObjTpBel():
 
 
 
-    def update(self, obs, eps=1e-6, feature=None, feature_vals=None):
+    def update(self, obs, eps=1e-6, feature=None, feature_ret_vals=None):
         if feature is None:
             # Update Belief using Binary Bayes Filter
             log_p = np.where(self.p > 0, np.log((self.p+eps)/(1-self.p+eps)), 0)
@@ -125,7 +125,7 @@ class ObjTpBel():
             del(log_p)
 
             # Update feature vals
-            for vox, val in feature_vals:
+            for vox, val in feature_ret_vals:
                 self.feature_bels[feature]['vals'][vox] = val
 
     

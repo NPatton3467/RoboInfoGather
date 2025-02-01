@@ -229,12 +229,9 @@ def get_fov_from_depth_image(camera_pos, robot_yaw, raw_depth_image, voxel_preds
             if max_depth >= size * resolution:
                 continue
 
-            x = float(p_x) / depth_image.shape[1]
-            y = float(p_y) / depth_image.shape[0]
-
             cur_depth = 0
             while cur_depth < max_depth:
-                world_coords = get_world_coords_from_depth(x, y, cur_depth, camera_pos, robot_yaw, cam_int_mat)
+                world_coords = get_world_coords_from_depth(p_x, p_y, cur_depth, camera_pos, robot_yaw, cam_int_mat)
 
                 # Set voxel pred location to 0 here
                 v_xy = world_to_map(np.array([world_coords[0],world_coords[1]]), resolution, size)
@@ -254,10 +251,7 @@ def get_fov_from_depth_image(camera_pos, robot_yaw, raw_depth_image, voxel_preds
             cur_depth = depth_image[p_y, p_x]
             max_depth = size * resolution
             while cur_depth < max_depth:
-                x = float(p_x) / depth_image.shape[1]
-                y = float(p_y) / depth_image.shape[0]
-
-                world_coords = get_world_coords_from_depth(x, y, cur_depth, camera_pos, robot_yaw, cam_int_mat)
+                world_coords = get_world_coords_from_depth(p_x, p_y, cur_depth, camera_pos, robot_yaw, cam_int_mat)
 
                 # Set voxel pred location to 0 here
                 v_xy = world_to_map(np.array([world_coords[0],world_coords[1]]), resolution, size)
@@ -1089,6 +1083,8 @@ def get_vox_preds(robot_yaw, camera_pos, camera_pose, belief, obj_tp, rgb_image,
         [np.cos(robot_yaw), -np.sin(robot_yaw), 0],
         [np.sin(robot_yaw), np.cos(robot_yaw), 0],
         [0,0,1]])
+
+    feature_ret_vals = []
     for i in range(len(real_world_coords)):
         x, y, z = real_world_coords[i]
         #x, y, z = np.matmul(Rotation, real_world_coords[i]) + camera_pos
@@ -1110,16 +1106,20 @@ def get_vox_preds(robot_yaw, camera_pos, camera_pose, belief, obj_tp, rgb_image,
 
             # Put score in prediction output
             if vx < map_size and vy < map_size and vz < voxel_preds.shape[2]:
-                voxel_preds[vx, vy, vz] = score
+                if config['observation_calc_params']['use_model_score']:
+                    voxel_preds[vx, vy, vz] = score
+                else:
+                    voxel_preds[vx, vy, vz] = config['observation_calc_params']['prob_correct_given_observed']
         
 
-        assert False # Need to add feature eval 
-                    # Crop image for each box
-                    # Use VLM to predict feature
+        if feature != None:
+            assert False # Need to add feature eval 
+                        # Crop image for each box
+                        # Use VLM to predict feature
     
     
     if found_obj:
         np.save(f'/robodata/user_data/npatt/OmniGibson/debug/voxel_predictions/{iteration}.npy', voxel_preds)
         np.save(f'/robodata/user_data/npatt/OmniGibson/debug/obstacle_maps/{iteration}.npy', obstacle_map.obstacles)
 
-    return voxel_preds, found_obj
+    return voxel_preds, feature_ret_vals, found_obj
