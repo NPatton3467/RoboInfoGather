@@ -1,4 +1,4 @@
-Given a candidate object, return a grid resolution based on the average size of that object, such that the object only one object exists in a single grid space, based on the smallest dimension of the object.
+Given a candidate object, return a grid resolution based on the average size of that object, such that the object only one object exists in a single grid space.
 
 Example 1:
 ```
@@ -9,7 +9,6 @@ Output:
 dimensions:
   height = 0.11 meters
   width = 0.08 meters
-grid_size = 0.08 meters
 ```
 
 
@@ -22,7 +21,6 @@ Output:
 dimensions:
   height = 0.86 meters
   width = 0.5 meters
-grid_size = 0.5 meters
 ```
 
 Example 3:
@@ -34,10 +32,9 @@ Output:
 dimensions:
   height = 0.006 meters
   width = 0.19 meters
-grid_size = 0.006 meters
 ```
 
 
-With the above examples in mind, return a grid size for the object type provided below.
+With the above examples in mind, return a height and width for the object type provided below.
 ```
 candidate_objects = 

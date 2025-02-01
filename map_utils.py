@@ -35,9 +35,9 @@ def get_map_params(obj_tp, map_original_size, map_original_resolution):
 
     # Extract grid size
     gresponse = response.choices[0].message.content
-    grid_size_idx = gresponse.find('grid_size')
+    grid_size_idx = gresponse.find('width')
     gresponse = gresponse[grid_size_idx:]
-    gresponse = gresponse.lstrip('grid_size = ')
+    gresponse = gresponse.lstrip('width = ')
     meters_idx = gresponse.find('meters')
     gresponse = gresponse[:meters_idx].rstrip(' ')
     map_resolution = float(gresponse)

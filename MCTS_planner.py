@@ -161,7 +161,7 @@ class MCTS_Tree_Node():
 
         xy = [new_loc.x, new_loc.y]
 
-        mxy = world_to_map(xy, self.obstacle_map.resolution, self.obstacle_map.size)
+        mxy = self.obstacle_map.world2vox(np.array(xy))
 
         dilate_rad = int(np.ceil(0.075 / self.obstacle_map.resolution))
         local_obs_map = cv2.dilate(self.obstacle_map.obstacles, np.ones((dilate_rad,dilate_rad)))
@@ -180,63 +180,63 @@ class MCTS_Tree_Node():
     def get_loc(self, act):
         j_size = self.config['planner_params']['mcts_step_length']
         if act == Action.M_LEFT:
-            cur_map_loc = world_to_map([self.loc.x, self.loc.y], self.obstacle_map.resolution, self.obstacle_map.size)
+            cur_map_loc = self.obstacle_map.world2vox(np.array([self.loc.x, self.loc.y]))
             cur_map_loc[0] = int(cur_map_loc[0] - j_size/self.obstacle_map.resolution)
 
-            new_real_loc_xy = map_to_world(cur_map_loc, self.obstacle_map.resolution, self.obstacle_map.size)
+            new_real_loc_xy = obstacle_map.vox2world(obstacle_map._vol_origin, cur_map_loc, obstacle_map._voxel_size)
 
             return Loc(new_real_loc_xy[0], new_real_loc_xy[1], self.loc.theta)
         elif act == Action.M_RIGHT:
-            cur_map_loc = world_to_map([self.loc.x, self.loc.y], self.obstacle_map.resolution, self.obstacle_map.size)
+            cur_map_loc = self.obstacle_map.world2vox(np.array([self.loc.x, self.loc.y]))
             cur_map_loc[0] = int(cur_map_loc[0] + j_size/self.obstacle_map.resolution)
 
-            new_real_loc_xy = map_to_world(cur_map_loc, self.obstacle_map.resolution, self.obstacle_map.size)
+            new_real_loc_xy = obstacle_map.vox2world(obstacle_map._vol_origin, cur_map_loc, obstacle_map._voxel_size)
 
             return Loc(new_real_loc_xy[0], new_real_loc_xy[1], self.loc.theta)
         elif act == Action.M_DOWN:
-            cur_map_loc = world_to_map([self.loc.x, self.loc.y], self.obstacle_map.resolution, self.obstacle_map.size)
+            cur_map_loc = self.obstacle_map.world2vox(np.array([self.loc.x, self.loc.y]))
             cur_map_loc[1] = int(cur_map_loc[1] - j_size/self.obstacle_map.resolution)
 
-            new_real_loc_xy = map_to_world(cur_map_loc, self.obstacle_map.resolution, self.obstacle_map.size)
+            new_real_loc_xy = obstacle_map.vox2world(obstacle_map._vol_origin, cur_map_loc, obstacle_map._voxel_size)
 
             return Loc(new_real_loc_xy[0], new_real_loc_xy[1], self.loc.theta)
         elif act == Action.M_UP:
-            cur_map_loc = world_to_map([self.loc.x, self.loc.y], self.obstacle_map.resolution, self.obstacle_map.size)
+            cur_map_loc = self.obstacle_map.world2vox(np.array([self.loc.x, self.loc.y]))
             cur_map_loc[1] = int(cur_map_loc[1] + j_size/self.obstacle_map.resolution)
 
-            new_real_loc_xy = map_to_world(cur_map_loc, self.obstacle_map.resolution, self.obstacle_map.size)
+            new_real_loc_xy = obstacle_map.vox2world(obstacle_map._vol_origin, cur_map_loc, obstacle_map._voxel_size)
 
             return Loc(new_real_loc_xy[0], new_real_loc_xy[1], self.loc.theta)
         elif act == Action.M_LEFTDOWN:
-            cur_map_loc = world_to_map([self.loc.x, self.loc.y], self.obstacle_map.resolution, self.obstacle_map.size)
+            cur_map_loc = self.obstacle_map.world2vox(np.array([self.loc.x, self.loc.y]))
             cur_map_loc[0] = int(cur_map_loc[0] - j_size/self.obstacle_map.resolution)
             cur_map_loc[1] = int(cur_map_loc[1] - j_size/self.obstacle_map.resolution)
 
-            new_real_loc_xy = map_to_world(cur_map_loc, self.obstacle_map.resolution, self.obstacle_map.size)
+            new_real_loc_xy = obstacle_map.vox2world(obstacle_map._vol_origin, cur_map_loc, obstacle_map._voxel_size)
 
             return Loc(new_real_loc_xy[0], new_real_loc_xy[1], self.loc.theta)
         elif act == Action.M_LEFTUP:
-            cur_map_loc = world_to_map([self.loc.x, self.loc.y], self.obstacle_map.resolution, self.obstacle_map.size)
+            cur_map_loc = self.obstacle_map.world2vox(np.array([self.loc.x, self.loc.y]))
             cur_map_loc[0] = int(cur_map_loc[0] - j_size/self.obstacle_map.resolution)
             cur_map_loc[1] = int(cur_map_loc[1] + j_size/self.obstacle_map.resolution)
 
-            new_real_loc_xy = map_to_world(cur_map_loc, self.obstacle_map.resolution, self.obstacle_map.size)
+            new_real_loc_xy = obstacle_map.vox2world(obstacle_map._vol_origin, cur_map_loc, obstacle_map._voxel_size)
 
             return Loc(new_real_loc_xy[0], new_real_loc_xy[1], self.loc.theta)
         elif act == Action.M_RIGHTDOWN:
-            cur_map_loc = world_to_map([self.loc.x, self.loc.y], self.obstacle_map.resolution, self.obstacle_map.size)
+            cur_map_loc = self.obstacle_map.world2vox(np.array([self.loc.x, self.loc.y]))
             cur_map_loc[0] = int(cur_map_loc[0] + j_size/self.obstacle_map.resolution)
             cur_map_loc[1] = int(cur_map_loc[1] - j_size/self.obstacle_map.resolution)
 
-            new_real_loc_xy = map_to_world(cur_map_loc, self.obstacle_map.resolution, self.obstacle_map.size)
+            new_real_loc_xy = obstacle_map.vox2world(obstacle_map._vol_origin, cur_map_loc, obstacle_map._voxel_size)
 
             return Loc(new_real_loc_xy[0], new_real_loc_xy[1], self.loc.theta)
         elif act == Action.M_RIGHTUP:
-            cur_map_loc = world_to_map([self.loc.x, self.loc.y], self.obstacle_map.resolution, self.obstacle_map.size)
+            cur_map_loc = self.obstacle_map.world2vox(np.array([self.loc.x, self.loc.y]))
             cur_map_loc[0] = int(cur_map_loc[0] + j_size/self.obstacle_map.resolution)
             cur_map_loc[1] = int(cur_map_loc[1] + j_size/self.obstacle_map.resolution)
 
-            new_real_loc_xy = map_to_world(cur_map_loc, self.obstacle_map.resolution, self.obstacle_map.size)
+            new_real_loc_xy = obstacle_map.vox2world(obstacle_map._vol_origin, cur_map_loc, obstacle_map._voxel_size)
 
             return Loc(new_real_loc_xy[0], new_real_loc_xy[1], self.loc.theta)
         elif act == Action.L_N:

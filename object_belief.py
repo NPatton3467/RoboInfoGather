@@ -50,27 +50,27 @@ class ObjTpBel():
             for feature in self.relevant_features:
                 if feature['name'] != None:
                     if feature['tp'] == "feature_scalar":
-                        feature_dict = {'bel': np.copy(self.p), "tp" : feature['tp']}
+                        feature_dict = {'bel': np.copy(self.p), "tp" : feature['tp'], "vals": np.zeros_like(self.p)}
                         self.feature_bels[feature['name']] = feature_dict
                     elif feature['tp'] == "feature_enum":
                         # For features, we want to keep around names like colour = red
                         x_dim, y_dim, z_dim = self.p.shape
-                        bel_z = np.array(['' for _ in range(z_dim)], dtype=object)
-                        bel_y = np.array([bel_z for _ in range(y_dim)], dtype=object)
-                        bel = np.array([bel_y for _ in range(x_dim)], dtype=object)
+                        val_z = np.array(['' for _ in range(z_dim)], dtype=object)
+                        val_y = np.array([val_z for _ in range(y_dim)], dtype=object)
+                        val = np.array([val_y for _ in range(x_dim)], dtype=object)
 
                         # Should have same shape
-                        assert bel.shape == self.p.shape
+                        assert val.shape == self.p.shape
 
 
-                        feature_dict = {'bel': bel, "tp" : feature['tp']}
+                        feature_dict = {'bel': np.copy(self.p), "tp" : feature['tp'], "vals": val}
                         self.feature_bels[feature['name']] = feature_dict
                     else:
                         assert False # Shouldn't get here
 
 
 
-    def update(self, obs, eps=1e-6, feature=None):
+    def update(self, obs, eps=1e-6, feature=None, feature_vals=None):
         if feature is None:
             # Update Belief using Binary Bayes Filter
             log_p = np.where(self.p > 0, np.log((self.p+eps)/(1-self.p+eps)), 0)
@@ -96,29 +96,38 @@ class ObjTpBel():
             del(new_log_p)
             del(log_p)
 
-            extended_trav_map = np.expand_dims(self.trav_map, axis=-1)
-            extended_trav_map = np.tile(extended_trav_map, (1,1, self.p.shape[2]))
-            self.p = np.where(extended_trav_map == 0, -1, self.p)
-
             print("Done Update")
         else:
-            print("Feature: ", feature)
-            #assert False # This needs to change to reflect aribitrary features (e.g. colour will have values of "red" here)
-            p = self.feature_bels[feature]
+            # Update Belief using Binary Bayes Filter
+            p = self.feature_bels[feature]['bel']
+            log_p = np.where(p > 0, np.log((p+eps)/(1-p+eps)), 0)
 
-            print(p)
-            print(obs)
-            print("Max obs: ", np.max(obs))
-
-            log_p = np.log((p+eps)/(1-p+eps))
+            print("p min/max", np.min(p), "/", np.max(p))
+            print("obs min/max", np.min(obs), "/", np.max(obs))
 
             inv_sensor_model = np.where(obs != -1, np.log((obs+eps)/(1-obs+eps)), 0)
 
-            new_log_p = np.where(inv_sensor_model != 0, log_p + inv_sensor_model, log_p)
+            #new_log_p = np.where(inv_sensor_model != 0, log_p + inv_sensor_model, log_p)
+            new_log_p = log_p + inv_sensor_model
 
-            self.feature_bels[feature] = 1 - (1/(1+np.exp(new_log_p)))
+            new_p = 1 - (1/(1+np.exp(new_log_p)))
+            self.feature_bels[feature]['bel'] = new_p
 
-            assert False # Done Feature Update?
+            if np.isnan(new_p).any():
+                print("Belief:")
+                print(new_p)
+                print("Observation:")
+                print(obs)
+                assert False
+            
+            del(inv_sensor_model)
+            del(new_log_p)
+            del(log_p)
 
+            # Update feature vals
+            for vox, val in feature_vals:
+                self.feature_bels[feature]['vals'][vox] = val
+
+    
     def get_visualization(self):
         return np.mean(self.p, axis=2)

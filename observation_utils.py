@@ -310,7 +310,7 @@ def get_fov(current_location, config, camera_params, obstacle_map, belief, debug
 
             # Check that x,y are within map bounds and not occluded 
             o_size = obstacle_map.size
-            o_xy = world_to_map(np.array([x,y]), obstacle_map.resolution, obstacle_map.size)
+            o_xy = obstacle_map.world2vox(np.array([x,y]))
             if o_xy[0] not in range(0, o_size) or o_xy[1] not in range(0, o_size):
                 break
             if inflated_resized_obstacle_map[o_xy[0], o_xy[1]] > 0:
@@ -863,7 +863,7 @@ def predict_unlikely_occluded_voxels(camera_pos, camera_rpy, obj_tp, state, conf
         while dist < max_v_dist:
             # Get node that corresponds to angle and dist (relative to robot)
             x, y = get_new_loc(loc, dist, angle, belief.map_params['res'], belief.map_params['size'])
-            o_map_xy = world_to_map(np.array([x, y]), obstacle_map.resolution, obstacle_map.size)
+            o_map_xy = obstacle_map.world2vox(np.array([x, y]))
 
             # Check that x,y are within map bounds
             x_max = belief.map_params['size']
@@ -1063,14 +1063,7 @@ def get_vox_preds(robot_yaw, camera_pos, belief, obj_tp, rgb_image, depth_image,
     predicted value of object existence.
     """
 
-    print(obstacle_map.shape)
-
     print("Robot Yaw: ", robot_yaw)
-
-    camera_intrinsic_mat[0][2] = 0.5
-    camera_intrinsic_mat[1][2] = 0.5
-    camera_intrinsic_mat[0][0] = 0.75 #1 / camera_intrinsic_mat[0][0]
-    camera_intrinsic_mat[1][1] = 0.75 #1 / camera_intrinsic_mat[1][1]
 
     voxel_preds = np.ones(belief.p.shape)
     voxel_preds *= -1
@@ -1119,7 +1112,7 @@ def get_vox_preds(robot_yaw, camera_pos, belief, obj_tp, rgb_image, depth_image,
 
     # TODO: FIX AFTER SORTED
     
-    real_world_coords, logits = obj_detection(dino_model, obj_tp, rgb_image, depth_image, feature, config, camera_pos, robot_yaw, tp="MANUAL")
+    real_world_coords, logits, feature_vals = obj_detection(dino_model, obj_tp, rgb_image, depth_image, feature, config, camera_pos, robot_yaw, tp="MANUAL")
     # Get the corresponding voxels
     found_obj = False
     if len(real_world_coords) > 0:
@@ -1160,87 +1153,6 @@ def get_vox_preds(robot_yaw, camera_pos, belief, obj_tp, rgb_image, depth_image,
                 voxel_preds[vx, vy, vz] = score
     
     
-    """
-    # Get the set object bounding boxes and confidence scores for object types/features from state
-    print("Getting Detections")
-    boxes, logits = obj_detection(dino_model, obj_tp, state, info, feature, config, camera_params, camera_pos, robot_yaw)
-    print("Done Getting Detections")
-
-    # Get the corresponding voxels
-    found_obj = False
-    if len(boxes) > 0:
-        found_obj = True
-
-        np.save(f'/robodata/user_data/npatt/OmniGibson/debug/grounding_dino_bb_images/boxes_{iteration}.npy', boxes)
-        np.save(f'/robodata/user_data/npatt/OmniGibson/debug/grounding_dino_bb_images/image_{iteration}.npy', np.array(state['robot0:eyes:Camera:0']['rgb']))
-        np.save(f'/robodata/user_data/npatt/OmniGibson/debug/grounding_dino_bb_images/depth_linear_image_{iteration}.npy', np.array(state['robot0:eyes:Camera:0']['depth_linear']))
-        np.save(f'/robodata/user_data/npatt/OmniGibson/debug/grounding_dino_bb_images/depth_image_{iteration}.npy', np.array(state['robot0:eyes:Camera:0']['depth']))
-
-    for i in range(len(boxes)):
-        bbox = boxes[i]
-        score = 1/(1+np.exp(-1*logits[i]))
-        assert score >= 0
-        # Get bounding box center 
-
-        # Get xyz coordinates of the centroid from image and depth
-        #correct = True
-        #x, y, z, depth, depth_linear = get_real_coords(bbox, robot_yaw, camera_pos, camera_ori, camera_rpy, state['robot0:eyes:Camera:0']['depth'], state['robot0:eyes:Camera:0']['depth_linear'], camera_intrinsic_mat, belief.map_params['res'])
-        x, y, z, depth, depth_linear, correct = get_centroid_coords(bbox, robot_yaw, camera_pos, camera_ori, camera_rpy, state['robot0:eyes:Camera:0']['depth'], state['robot0:eyes:Camera:0']['depth_linear'], camera_intrinsic_mat, belief.map_params['res'])
-        #x,y,z, correct = get_centroid_coords_sam(bbox, robot_yaw, camera_pos, \
-        #        state['robot0:eyes:Camera:0']['rgb'],\
-        #        state['robot0:eyes:Camera:0']['depth_linear'],\
-        #        camera_intrinsic_mat,\
-        #        belief.map_params['res'])
-
-        # Save real coords to file
-        with open(f'/robodata/user_data/npatt/OmniGibson/debug/bb_continuous_projections/{iteration}_{i}.txt', 'a') as f:
-            f.write(f'Obj Location: {x}, {y}, {z}\n')
-            #f.write(f'Depth: {depth}\n')
-            #f.write(f'Depth Linear: {depth_linear}\n')
-            f.write(f'Camera Location: {camera_pos}\n')
-            f.write(f'Camera RPY: {camera_rpy}\n')
-            f.write(f'Camera Ori: {camera_ori}\n')
-            f.write(f'Obstacle Map Size: {obstacle_map.size}\n')
-            f.write(f'Obstacle Map Resolution: {obstacle_map.resolution}\n')
-            f.write('\n')
-
-        if correct:
-            # Translate to map coords and add to prediction
-            x, y, z = check_cluster(x, y, z, belief)
-            xy = [x, y]
-            map_resolution = belief.map_params['res']
-            map_size = belief.map_params['size']
-            vxy = world_to_map(xy, map_resolution, map_size)
-
-            vx = vxy[0]
-            vy = vxy[1]
-
-            if not np.isnan(z):
-                vz = int(z / belief.map_params['z_res'])
-
-                # Put score in prediction output
-                if vx < map_size and vy < map_size and vz < voxel_preds.shape[2]:
-                    voxel_preds[vx, vy, vz] = score
-    # TODO: END of above
-    """
-
-    # Predict score for occluded regions
-    #low_likelihood_voxels = predict_unlikely_occluded_voxels(camera_pos, camera_rpy, obj_tp, state, config, obstacle_map, belief, dino_model, feature)
-    print("Starting Low Likelihood Estimate")
-    low_likelihood_voxels = []
-
-    for vox in low_likelihood_voxels:
-        # Loop throught z-dim
-        for z in range(belief.z_dim):
-            # Make sure we're not contradiction previous observation scores
-            vxy = world_to_map(np.array([vox[0], vox[1]], map_resolution=belief.map_params['res'], map_size=belief.map_params['size']))
-            if voxel_preds[vxy[0], vxy[1], z] == -1:
-                voxel_preds[vxy[0], vxy[1], z] = config['observation_calc_params']['dne_occluded_prob']
-    
-    print("Done Low Likelihood Estimate")
-
-    print("Done get_vox_preds")
-
     if found_obj:
         np.save(f'/robodata/user_data/npatt/OmniGibson/debug/voxel_predictions/{iteration}.npy', voxel_preds)
         np.save(f'/robodata/user_data/npatt/OmniGibson/debug/obstacle_maps/{iteration}.npy', obstacle_map.obstacles)

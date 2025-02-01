@@ -65,8 +65,8 @@ def get_path(start_pos, child_node, obstacle_map):
 
         cur_node = best_child
 
-    start_loc = world_to_map(np.array([start_pos[0], start_pos[1]]), obstacle_map.resolution, obstacle_map.size)
-    goal_loc = world_to_map(np.array([cur_node.loc.x, cur_node.loc.y]), obstacle_map.resolution, obstacle_map.size)
+    start_loc = obstacle_map.world2vox(np.array([start_pos[0], start_pos[1]]))
+    goal_loc = obstacle_map.world2vox(np.array([cur_node.loc.x, cur_node.loc.y]))
     #path = a_star(goal_loc, start_loc, obstacle_map)
 
     return -1, cur_node.loc.theta
@@ -82,13 +82,16 @@ def sample_locs(start, pomdp, obstacle_map, configs):
 
     while num_checked < configs['planner_params']['max_num_samples']:
         # Sample Inflated Obstalce map for map coords
-        o_size = obstacle_map.size
-        o_res = obstacle_map.resolution
+        o_size = obstacle_map._bol_bnds
+        o_res = obstacle_map._voxel_size
         s_disc = configs['planner_params']['sample_discretization']
         x_obs_map_coords = np.random.randint(0, int(o_size/s_disc)) * s_disc
         y_obs_map_coords = np.random.randint(0, int(o_size/s_disc)) * s_disc
 
-        xy_world_coords = map_to_world(np.array([x_obs_map_coords, y_obs_map_coords]), o_res, o_size)
+        xy_world_coords = obstacle_map.vox2world(
+                obstacle_map._vol_origin,
+                np.array([x_obs_map_coords, y_obs_map_coords]),
+                obstacle_map._voxel_size)
 
         # Check if legal in belief
         legal = True
