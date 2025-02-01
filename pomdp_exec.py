@@ -65,8 +65,8 @@ def get_path(start_pos, child_node, obstacle_map):
 
         cur_node = best_child
 
-    start_loc = obstacle_map.world2vox(np.array([start_pos[0], start_pos[1]]))
-    goal_loc = obstacle_map.world2vox(np.array([cur_node.loc.x, cur_node.loc.y]))
+    start_loc = obstacle_map.world2vox(np.array([[start_pos[0], start_pos[1]]]))
+    goal_loc = obstacle_map.world2vox(np.array([[cur_node.loc.x, cur_node.loc.y]]))
     #path = a_star(goal_loc, start_loc, obstacle_map)
 
     return -1, cur_node.loc.theta

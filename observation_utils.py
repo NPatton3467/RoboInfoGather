@@ -218,7 +218,7 @@ def get_world_coords_from_depth(x, y, depth, camera_pos, robot_yaw, camera_intri
 
 def get_fov_from_depth_image(camera_pos, robot_yaw, raw_depth_image, voxel_preds, resolution, z_res, size, config, cam_int_mat):
     # Max pool to decrease image size
-    depth_image = skimage.measure.block_reduce(raw_depth_image, (4,4), np.min)
+    depth_image = skimage.measure.block_reduce(raw_depth_image, (8,8), np.min)
     print("Got Depth Image... Shape: ", depth_image.shape)
 
     # Set to zero up to obstacle
@@ -242,7 +242,7 @@ def get_fov_from_depth_image(camera_pos, robot_yaw, raw_depth_image, voxel_preds
                     if v_xy[0] in range(0, size) and v_xy[1] in range(0, size) and vz in range(0, voxel_preds.shape[2]):
                         voxel_preds[v_xy[0], v_xy[1], vz] = config['observation_calc_params']['prob_occ_given_obs_free']
 
-                cur_depth += (resolution / 5)
+                cur_depth += (resolution / 2)
 
 
     # Make sure obstacles are still set to -1
@@ -262,7 +262,7 @@ def get_fov_from_depth_image(camera_pos, robot_yaw, raw_depth_image, voxel_preds
                     if v_xy[0] in range(0, size) and v_xy[1] in range(0, size) and vz in range(0, voxel_preds.shape[2]):
                         voxel_preds[v_xy[0], v_xy[1], vz] = -1
 
-                cur_depth += (resolution / 5)
+                cur_depth += (resolution / 2)
                
 
     return voxel_preds
@@ -300,7 +300,7 @@ def get_fov(current_location, config, camera_params, obstacle_map, belief, debug
 
             # Check that x,y are within map bounds and not occluded 
             o_size = obstacle_map.size
-            o_xy = obstacle_map.world2vox(np.array([x,y]))
+            o_xy = obstacle_map.world2vox(np.array([[x,y]]))
             if o_xy[0] not in range(0, o_size) or o_xy[1] not in range(0, o_size):
                 break
             if inflated_resized_obstacle_map[o_xy[0], o_xy[1]] > 0:
@@ -850,7 +850,7 @@ def predict_unlikely_occluded_voxels(camera_pos, camera_rpy, obj_tp, state, conf
         while dist < max_v_dist:
             # Get node that corresponds to angle and dist (relative to robot)
             x, y = get_new_loc(loc, dist, angle, belief.map_params['res'], belief.map_params['size'])
-            o_map_xy = obstacle_map.world2vox(np.array([x, y]))
+            o_map_xy = obstacle_map.world2vox(np.array([[x, y]]))
 
             # Check that x,y are within map bounds
             x_max = belief.map_params['size']

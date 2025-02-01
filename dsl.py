@@ -367,10 +367,10 @@ class WhereClause:
                     dist = np.norm(symbolic_info[self.obj_tp][inst1]['location'] - 
                                     symbolic_info[self.obj_tp2][inst2]['location'])
                     if dist <= asdfasdf:
-                        temp_dict[inst1] = symbolic_info[self.obj_tp][inst1]
+                        temp_dict1[inst1] = symbolic_info[self.obj_tp][inst1]
                         temp_dict2[inst2] = symbolic_info[self.obj_tp2][inst2]
 
-            ret_symb_info[self.obj_tp] = temp_dict                
+            ret_symb_info[self.obj_tp] = temp_dict1
             ret_symb_info[self.obj_tp2] = temp_dict2
 
         elif self.where_tp == "and":
