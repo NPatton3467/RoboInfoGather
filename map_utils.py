@@ -58,7 +58,6 @@ def get_map_params(obj_tp, map_original_size, map_original_resolution):
     return {'res' : map_resolution, 'og_res' : map_original_resolution, 'size' : map_size, 'og_size' : map_original_size, 'z_res' : z_resolution}
 
 def world_to_map(xy, map_resolution, map_size):
-    assert False # Need to consider offset now + non square?
     return np.flip((np.array(xy) / map_resolution + map_size / 2.0)).astype(np.int)
 
 def map_to_world(xy, map_resolution, map_size):

@@ -236,12 +236,8 @@ def get_fov_from_depth_image(camera_pos, robot_yaw, raw_depth_image, voxel_preds
             while cur_depth < max_depth:
                 world_coords = get_world_coords_from_depth(x, y, cur_depth, camera_pos, robot_yaw, cam_int_mat)
 
-                print("World Coords: ", world_coords)
                 # Set voxel pred location to 0 here
                 v_xy = world_to_map(np.array([world_coords[0],world_coords[1]]), resolution, size)
-
-                print("VXY: ", v_xy)
-                assert False
 
                 if not np.isnan(world_coords[2]):
                     vz = int(world_coords[2] / z_res)
@@ -471,7 +467,7 @@ def get_centroid_coords(bbox, robot_yaw, camera_pos, camera_ori, depth_image, de
     return n_point[0], n_point[1], (lz+rz)/2.0, ldepth, ldepth_linear, correct
 
 
-def obj_detection(dino_model, obj_tp, rgb_img, depth_img, feature, config, camera_pos, robot_yaw, use_GD=False, tp='MANUAL'):
+def obj_detection(dino_model, obj_tp, rgb_img, depth_img, config, camera_pos, robot_yaw, use_GD=False, tp='MANUAL'):
     if use_GD:
         img = np.array(state['robot0:eyes:Camera:0']['rgb'])
         #Image should be torch tensor
@@ -485,11 +481,8 @@ def obj_detection(dino_model, obj_tp, rgb_img, depth_img, feature, config, camer
         )
         img, _ = transform(img, None)
 
-        if feature is None:
-            TEXT_PROMPT = f'{obj_tp}'
-        else:
-            TEXT_PROMPT = f'{obj_tp} with {feature}'
 
+        TEXT_PROMPT = f'{obj_tp}'
         BOX_THRESHOLD = 0.6
         TEXT_THRESHOLD = 0.25
 
@@ -1051,7 +1044,7 @@ def check_cluster(x, y, z, belief):
         belief.clusters.append((p, 1))
         return p[0], p[1], p[2]
 
-def get_vox_preds(robot_yaw, camera_pos, belief, obj_tp, rgb_image, depth_image, dino_model, config, obstacle_map, camera_intrinsic_mat, feature=None, iteration=0):
+def get_vox_preds(robot_yaw, camera_pos, camera_pose, belief, obj_tp, rgb_image, depth_image, dino_model, config, obstacle_map, camera_intrinsic_mat, feature=None, iteration=0):
     """
     Function to get predicted value of existence at each voxel (for an object type) 
     give observation
@@ -1078,41 +1071,8 @@ def get_vox_preds(robot_yaw, camera_pos, belief, obj_tp, rgb_image, depth_image,
     z_dim_max = belief.z_dim
     print("Starting FOV")
     voxel_preds = get_fov_from_depth_image(camera_pos, robot_yaw, depth_image, voxel_preds, resolution, belief.map_params['z_res'], size, config, camera_intrinsic_mat)
-    print("Got FOV") 
-    assert False
-    #camera_angle_mat = quat_to_rot(camera_ori)
-    #loc = Loc(camera_pos[0], camera_pos[1], camera_rpy[2])# - np.deg2rad(90))
-    #print("Camera Angle", np.arccos(camera_angle_mat[0][0]) - np.deg2rad(90), camera_rpy[2])
-    #fov, obstacles = get_fov(loc, config, config['camera_params'], obstacle_map, belief)
-    #checked_xy = []
-    #for x, y in fov:
-    #    vxy = world_to_map(np.array([x, y]), map_resolution=belief.map_params['res'], map_size=belief.map_params['size'])
-    #    if (vxy[0], vxy[1]) in checked_xy:
-    #        continue
-    #    else:
-    #        checked_xy.append((vxy[0], vxy[1]))
-
-    #    for z in range(belief.z_dim):
-    #        # Set 0 for whole z_dim
-    #        voxel_preds[vxy[0], vxy[1], z] = config['observation_calc_params']['prob_occ_given_obs_free']
     
-    # Make sure obstacles are set
-    #checked_xy = []
-    #for x, y in obstacles:
-    #    vxy = world_to_map(np.array([x, y]), map_resolution=belief.map_params['res'], map_size=belief.map_params['size'])
-    #    if (vxy[0], vxy[1]) in checked_xy:
-    #        continue
-    #    else:
-    #        checked_xy.append((vxy[0], vxy[1]))
-
-    #    for z in range(belief.z_dim):
-    #        # Set 0 for whole z_dim
-    #        voxel_preds[vxy[0], vxy[1], z] = -1
-
-
-    # TODO: FIX AFTER SORTED
-    
-    real_world_coords, logits, feature_vals = obj_detection(dino_model, obj_tp, rgb_image, depth_image, feature, config, camera_pos, robot_yaw, tp="MANUAL")
+    real_world_coords, logits = obj_detection(dino_model, obj_tp, rgb_image, depth_image, config, camera_pos, robot_yaw, tp="MANUAL")
     # Get the corresponding voxels
     found_obj = False
     if len(real_world_coords) > 0:
@@ -1151,6 +1111,11 @@ def get_vox_preds(robot_yaw, camera_pos, belief, obj_tp, rgb_image, depth_image,
             # Put score in prediction output
             if vx < map_size and vy < map_size and vz < voxel_preds.shape[2]:
                 voxel_preds[vx, vy, vz] = score
+        
+
+        assert False # Need to add feature eval 
+                    # Crop image for each box
+                    # Use VLM to predict feature
     
     
     if found_obj:

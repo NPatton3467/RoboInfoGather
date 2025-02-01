@@ -176,9 +176,25 @@ def gen_pomdp_from_query(query, pos, yaw, trav_map_og_size, trav_map_og_res, con
 
             else:
                 # Check for features
-                for feat in obj_feat_dict[obj]:
-                    if feat not in prev_pomdp.bel[obj].feature_bels:
-                        # Make a new feature belief 
-                        prev_pomdp.bel[obj].feature_bels[feature] = np.copy(prev_pomdp.bel[obj].backup_p)
+                for feature in obj_feat_dict[obj]:
+                    if feature not in prev_pomdp.bel[obj].feature_bels:
+                        # Make a new feature belief
+                        feature_dict = {}
+                        p = np.copy(prev_pomdp.bel[obj].p)
+                        if feature['tp'] == "feature_scalar":
+                            feature_dict = {'bel': np.copy(p), "tp" : feature['tp'], "vals": np.zeros_like(p)}
+                        elif feature['tp'] == "feature_enum":
+                            # For features, we want to keep around names like colour = red
+                            x_dim, y_dim, z_dim = p.shape
+                            val_z = np.array(['' for _ in range(z_dim)], dtype=object)
+                            val_y = np.array([val_z for _ in range(y_dim)], dtype=object)
+                            val = np.array([val_y for _ in range(x_dim)], dtype=object)
+
+                            # Should have same shape
+                            assert val.shape == p.shape
+
+                            feature_dict = {'bel': np.copy(p), "tp" : feature['tp'], "vals": val}
+
+                        prev_pomdp.bel[obj].feature_bels[feature['name']] = feature_dict
 
         return prev_pomdp

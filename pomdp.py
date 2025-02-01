@@ -80,6 +80,7 @@ class POMDP():
                                     assert False # Shouldn't get here
 
                             feature_dict['location'] = (x,y,z)
+                            assert False # Make above world coords
 
                             cur_obj_dict[instance_count] = feature_dict
 
