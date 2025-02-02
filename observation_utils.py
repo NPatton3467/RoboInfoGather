@@ -275,7 +275,7 @@ def get_fov(current_location, config, camera_params, obstacle_map, belief, debug
     max_v_dist = camera_params['max_visual_distance']
 
     angle_delta = config['rf_params']['angle_delta']
-    #dist_delta = min(0.15, obstacle_map.resolution * 0.8)
+    dist_delta = min(0.15, obstacle_map._voxel_size * 0.8)
 
     angle = min_angle
 
@@ -308,9 +308,9 @@ def get_fov(current_location, config, camera_params, obstacle_map, belief, debug
             
 
             # Check if new location would cause a collision
-            height_voxel = int(0.4 / self.obstacle_map._voxel_size) + self.obstacle_map.min_height_voxel
+            height_voxel = int(0.4 / obstacle_map._voxel_size) + obstacle_map.min_height_voxel
             unoccupied = np.logical_and(
-                self.obstacle_map._tsdf_vol_cpu[mxy[0], mxy[1], height_voxel] > 0, self.obstacle_map._tsdf_vol_cpu[mxy[0], mxy[1], 0] < 0
+                obstacle_map._tsdf_vol_cpu[o_xy[0], o_xy[1], height_voxel] > 0, obstacle_map._tsdf_vol_cpu[o_xy[0], o_xy[1], 0] < 0
             )
 
             if unoccupied:

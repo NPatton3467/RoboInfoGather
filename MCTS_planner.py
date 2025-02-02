@@ -186,28 +186,28 @@ class MCTS_Tree_Node():
             cur_map_loc = self.obstacle_map.world2vox(np.array([self.loc.x, self.loc.y, 0]))
             cur_map_loc[0] = int(cur_map_loc[0] - j_size/self.obstacle_map._voxel_size)
 
-            new_real_loc_xy = obstacle_map.vox2world(obstacle_map._vol_origin, cur_map_loc, obstacle_map._voxel_size)
+            new_real_loc_xy = self.obstacle_map.vox2world(self.obstacle_map._vol_origin, np.array([cur_map_loc]), self.obstacle_map._voxel_size)[0]
 
             return Loc(new_real_loc_xy[0], new_real_loc_xy[1], self.loc.theta)
         elif act == Action.M_RIGHT:
             cur_map_loc = self.obstacle_map.world2vox(np.array([self.loc.x, self.loc.y, 0]))
             cur_map_loc[0] = int(cur_map_loc[0] + j_size/self.obstacle_map._voxel_size)
 
-            new_real_loc_xy = obstacle_map.vox2world(obstacle_map._vol_origin, cur_map_loc, obstacle_map._voxel_size)
+            new_real_loc_xy = self.obstacle_map.vox2world(self.obstacle_map._vol_origin, np.array([cur_map_loc]), self.obstacle_map._voxel_size)[0]
 
             return Loc(new_real_loc_xy[0], new_real_loc_xy[1], self.loc.theta)
         elif act == Action.M_DOWN:
             cur_map_loc = self.obstacle_map.world2vox(np.array([self.loc.x, self.loc.y, 0]))
             cur_map_loc[1] = int(cur_map_loc[1] - j_size/self.obstacle_map._voxel_size)
 
-            new_real_loc_xy = obstacle_map.vox2world(obstacle_map._vol_origin, cur_map_loc, obstacle_map._voxel_size)
+            new_real_loc_xy = self.obstacle_map.vox2world(self.obstacle_map._vol_origin, np.array([cur_map_loc]), self.obstacle_map._voxel_size)[0]
 
             return Loc(new_real_loc_xy[0], new_real_loc_xy[1], self.loc.theta)
         elif act == Action.M_UP:
             cur_map_loc = self.obstacle_map.world2vox(np.array([self.loc.x, self.loc.y, 0]))
             cur_map_loc[1] = int(cur_map_loc[1] + j_size/self.obstacle_map._voxel_size)
 
-            new_real_loc_xy = obstacle_map.vox2world(obstacle_map._vol_origin, cur_map_loc, obstacle_map._voxel_size)
+            new_real_loc_xy = self.obstacle_map.vox2world(self.obstacle_map._vol_origin, np.array([cur_map_loc]), self.obstacle_map._voxel_size)[0]
 
             return Loc(new_real_loc_xy[0], new_real_loc_xy[1], self.loc.theta)
         elif act == Action.M_LEFTDOWN:
@@ -215,7 +215,7 @@ class MCTS_Tree_Node():
             cur_map_loc[0] = int(cur_map_loc[0] - j_size/self.obstacle_map._voxel_size)
             cur_map_loc[1] = int(cur_map_loc[1] - j_size/self.obstacle_map._voxel_size)
 
-            new_real_loc_xy = obstacle_map.vox2world(obstacle_map._vol_origin, cur_map_loc, obstacle_map._voxel_size)
+            new_real_loc_xy = self.obstacle_map.vox2world(self.obstacle_map._vol_origin, np.array([cur_map_loc]), self.obstacle_map._voxel_size)[0]
 
             return Loc(new_real_loc_xy[0], new_real_loc_xy[1], self.loc.theta)
         elif act == Action.M_LEFTUP:
@@ -223,7 +223,7 @@ class MCTS_Tree_Node():
             cur_map_loc[0] = int(cur_map_loc[0] - j_size/self.obstacle_map._voxel_size)
             cur_map_loc[1] = int(cur_map_loc[1] + j_size/self.obstacle_map._voxel_size)
 
-            new_real_loc_xy = obstacle_map.vox2world(obstacle_map._vol_origin, cur_map_loc, obstacle_map._voxel_size)
+            new_real_loc_xy = self.obstacle_map.vox2world(self.obstacle_map._vol_origin, np.array([cur_map_loc]), self.obstacle_map._voxel_size)[0]
 
             return Loc(new_real_loc_xy[0], new_real_loc_xy[1], self.loc.theta)
         elif act == Action.M_RIGHTDOWN:
@@ -231,7 +231,7 @@ class MCTS_Tree_Node():
             cur_map_loc[0] = int(cur_map_loc[0] + j_size/self.obstacle_map._voxel_size)
             cur_map_loc[1] = int(cur_map_loc[1] - j_size/self.obstacle_map._voxel_size)
 
-            new_real_loc_xy = obstacle_map.vox2world(obstacle_map._vol_origin, cur_map_loc, obstacle_map._voxel_size)
+            new_real_loc_xy = self.obstacle_map.vox2world(self.obstacle_map._vol_origin, np.array([cur_map_loc]), self.obstacle_map._voxel_size)[0]
 
             return Loc(new_real_loc_xy[0], new_real_loc_xy[1], self.loc.theta)
         elif act == Action.M_RIGHTUP:
@@ -239,7 +239,7 @@ class MCTS_Tree_Node():
             cur_map_loc[0] = int(cur_map_loc[0] + j_size/self.obstacle_map._voxel_size)
             cur_map_loc[1] = int(cur_map_loc[1] + j_size/self.obstacle_map._voxel_size)
 
-            new_real_loc_xy = obstacle_map.vox2world(obstacle_map._vol_origin, cur_map_loc, obstacle_map._voxel_size)
+            new_real_loc_xy = self.obstacle_map.vox2world(self.obstacle_map._vol_origin, np.array([cur_map_loc]), self.obstacle_map._voxel_size)[0]
 
             return Loc(new_real_loc_xy[0], new_real_loc_xy[1], self.loc.theta)
         elif act == Action.L_N:

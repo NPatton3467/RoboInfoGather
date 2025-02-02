@@ -90,8 +90,8 @@ def sample_locs(start, pomdp, obstacle_map, configs):
 
         xy_world_coords = obstacle_map.vox2world(
                 obstacle_map._vol_origin,
-                np.array([x_obs_map_coords, y_obs_map_coords]),
-                obstacle_map._voxel_size)
+                np.array([[x_obs_map_coords, y_obs_map_coords, 0]]),
+                obstacle_map._voxel_size)[0]
 
         # Check if legal in belief
         legal = True
