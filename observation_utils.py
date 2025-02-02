@@ -275,12 +275,13 @@ def get_fov(current_location, config, camera_params, obstacle_map, belief, debug
     max_v_dist = camera_params['max_visual_distance']
 
     angle_delta = config['rf_params']['angle_delta']
-    dist_delta = min(0.15, obstacle_map.resolution * 0.8)
+    #dist_delta = min(0.15, obstacle_map.resolution * 0.8)
 
     angle = min_angle
 
     # Use inflated and resized obstacle map to not see through walls?
-    inflated_resized_obstacle_map = get_ir_o_map(obstacle_map, belief.map_params['size'])
+    #inflated_resized_obstacle_map = get_ir_o_map(obstacle_map, belief.map_params['size'])
+    inflated_resized_obstacle_map = obstacle_map._tsdf_vol_cpu
 
     fov = []
     obstacles = []
@@ -299,11 +300,20 @@ def get_fov(current_location, config, camera_params, obstacle_map, belief, debug
                 continue
 
             # Check that x,y are within map bounds and not occluded 
-            o_size = obstacle_map.size
+            o_size_x = inflated_resized_obstacle_map.shape[0]
+            o_size_y = inflated_resized_obstacle_map.shape[1]
             o_xy = obstacle_map.world2vox(np.array([x, y, 0]))
-            if o_xy[0] not in range(0, o_size) or o_xy[1] not in range(0, o_size):
+            if o_xy[0] not in range(0, o_size_x) or o_xy[1] not in range(0, o_size_y):
                 break
-            if inflated_resized_obstacle_map[o_xy[0], o_xy[1]] > 0:
+            
+
+            # Check if new location would cause a collision
+            height_voxel = int(0.4 / self.obstacle_map._voxel_size) + self.obstacle_map.min_height_voxel
+            unoccupied = np.logical_and(
+                self.obstacle_map._tsdf_vol_cpu[mxy[0], mxy[1], height_voxel] > 0, self.obstacle_map._tsdf_vol_cpu[mxy[0], mxy[1], 0] < 0
+            )
+
+            if unoccupied:
                 obstacles.append((x,y))
                 break
 
@@ -461,9 +471,9 @@ def get_centroid_coords(bbox, robot_yaw, camera_pos, camera_ori, depth_image, de
     return n_point[0], n_point[1], (lz+rz)/2.0, ldepth, ldepth_linear, correct
 
 
-def obj_detection(dino_model, obj_tp, rgb_img, depth_img, config, camera_pos, robot_yaw, use_GD=False, tp='MANUAL'):
+def obj_detection(dino_model, obj_tp, rgb_img, depth_img, config, camera_pos, robot_yaw, use_GD=True, tp='MANUAL', feature=None):
     if use_GD:
-        img = np.array(state['robot0:eyes:Camera:0']['rgb'])
+        img = rgb_img
         #Image should be torch tensor
         img = Image.fromarray(img).convert('RGB')
         transform = T.Compose(
@@ -489,7 +499,50 @@ def obj_detection(dino_model, obj_tp, rgb_img, depth_img, config, camera_pos, ro
                 text_threshold=TEXT_THRESHOLD
             )
 
-        return boxes, logits
+        feature_ret_vals = [] 
+        if feature != None:
+            for box in boxes:
+                cropped_img = rgb_img
+
+                x_min = int((box[0] - box[2]) * cropped_img.shape[1])
+                x_max = int((box[0] + box[2]) * cropped_img.shape[1])
+                y_min = int((box[1] - box[3]) * cropped_img.shape[0])
+                y_max = int((box[1] + box[3]) * cropped_img.shape[0])
+
+                cropped_img = cropped_img[y_min:y_max, x_min:x_max, :]
+                img = Image.fromarray(cropped_img).convert('RGB')
+                transform = T.Compose(
+                    [
+                        T.RandomResize([800], max_size=1333),
+                        T.ToTensor(),
+                        T.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225]),
+                    ]
+                )
+                img, _ = transform(img, None)
+        
+                # Query VLM
+                prompt += f"Given the image and object type `{obj_tp}`, what is the value of the feature `{feature}`? Please respond with only a single word, answering the above question."
+                PROMPT_MESSAGES = [
+                    {
+                        "role": "user",
+                        "content": [
+                            f"{prompt}",
+                            *map({"image": img, "resize": 128}, base64Frames[1000:1500:20]),
+                        ],
+                    },
+                ]
+                params = {
+                    "model": "gpt-4-vision-preview",
+                    "messages": PROMPT_MESSAGES,
+                    #"max_tokens": 200,
+                }
+
+                result = client.chat.completions.create(**params)
+                response = result.choices[0].message.content
+
+                feature_ret_vals.append(response)
+
+        return boxes, feature_ret_vals, logits
     elif tp == 'MANUAL': # Manual labelled points
         def in_fov(chair_loc, camera_pos, robot_yaw, ang):
             # Get FOV boundaries
@@ -1066,7 +1119,7 @@ def get_vox_preds(robot_yaw, camera_pos, camera_pose, belief, obj_tp, rgb_image,
     print("Starting FOV")
     voxel_preds = get_fov_from_depth_image(camera_pos, robot_yaw, depth_image, voxel_preds, resolution, belief.map_params['z_res'], size, config, camera_intrinsic_mat)
     
-    real_world_coords, logits = obj_detection(dino_model, obj_tp, rgb_image, depth_image, config, camera_pos, robot_yaw, tp="MANUAL")
+    real_world_coords, feature_ret_vals, logits = obj_detection(dino_model, obj_tp, rgb_image, depth_image, config, camera_pos, robot_yaw, feature=feature)
     # Get the corresponding voxels
     found_obj = False
     if len(real_world_coords) > 0:
@@ -1084,12 +1137,12 @@ def get_vox_preds(robot_yaw, camera_pos, camera_pose, belief, obj_tp, rgb_image,
         [np.sin(robot_yaw), np.cos(robot_yaw), 0],
         [0,0,1]])
 
-    feature_ret_vals = []
+    feature_vox_ret_vals = []
     for i in range(len(real_world_coords)):
         x, y, z = real_world_coords[i]
         #x, y, z = np.matmul(Rotation, real_world_coords[i]) + camera_pos
         print("REAL WORLD: ", x,y,z)
-        score = 1/(1+np.exp(-1*logits[i]))
+        score = logits[i] #1/(1+np.exp(-1*logits[i]))
         
         xy = [x, y]
         map_resolution = belief.map_params['res']
@@ -1109,17 +1162,14 @@ def get_vox_preds(robot_yaw, camera_pos, camera_pose, belief, obj_tp, rgb_image,
                 if config['observation_calc_params']['use_model_score']:
                     voxel_preds[vx, vy, vz] = score
                 else:
-                    voxel_preds[vx, vy, vz] = config['observation_calc_params']['prob_correct_given_observed']
-        
+                    voxel_preds[vx, vy, vz] = config['observation_calc_params']['prob_correct_given_observed'] 
 
-        if feature != None:
-            assert False # Need to add feature eval 
-                        # Crop image for each box
-                        # Use VLM to predict feature
-    
+            if feature != None:
+                feature_vox_ret_vals.append([np.array([vx, vy, vz]), feature_ret_vals[i]])
+            
     
     #if found_obj:
         #np.save(f'/robodata/user_data/npatt/OmniGibson/debug/voxel_predictions/{iteration}.npy', voxel_preds)
         #np.save(f'/robodata/user_data/npatt/OmniGibson/debug/obstacle_maps/{iteration}.npy', obstacle_map.obstacles)
 
-    return voxel_preds, feature_ret_vals, found_obj
+    return voxel_preds, feature_vox_ret_vals, found_obj

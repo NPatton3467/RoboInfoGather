@@ -170,9 +170,9 @@ class MCTS_Tree_Node():
             return False
         
         # Check if new location would cause a collision
-        height_voxel = int(0.4 / obstacle_map._voxel_size) + obstacle_map.min_height_voxel
+        height_voxel = int(0.4 / self.obstacle_map._voxel_size) + self.obstacle_map.min_height_voxel
         unoccupied = np.logical_and(
-            obstacle_map._tsdf_vol_cpu[mxy[0], mxy[1], height_voxel] > 0, obstacle_map._tsdf_vol_cpu[mxy[0], mxy[1], 0] < 0
+            self.obstacle_map._tsdf_vol_cpu[mxy[0], mxy[1], height_voxel] > 0, self.obstacle_map._tsdf_vol_cpu[mxy[0], mxy[1], 0] < 0
         )
 
         if not unoccupied:
