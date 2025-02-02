@@ -300,7 +300,7 @@ def get_fov(current_location, config, camera_params, obstacle_map, belief, debug
 
             # Check that x,y are within map bounds and not occluded 
             o_size = obstacle_map.size
-            o_xy = obstacle_map.world2vox(np.array([[x,y]]))
+            o_xy = obstacle_map.world2vox(np.array([x, y, 0]))
             if o_xy[0] not in range(0, o_size) or o_xy[1] not in range(0, o_size):
                 break
             if inflated_resized_obstacle_map[o_xy[0], o_xy[1]] > 0:
@@ -850,7 +850,7 @@ def predict_unlikely_occluded_voxels(camera_pos, camera_rpy, obj_tp, state, conf
         while dist < max_v_dist:
             # Get node that corresponds to angle and dist (relative to robot)
             x, y = get_new_loc(loc, dist, angle, belief.map_params['res'], belief.map_params['size'])
-            o_map_xy = obstacle_map.world2vox(np.array([[x, y]]))
+            o_map_xy = obstacle_map.world2vox(np.array([x, y, 0]))
 
             # Check that x,y are within map bounds
             x_max = belief.map_params['size']
@@ -1072,11 +1072,11 @@ def get_vox_preds(robot_yaw, camera_pos, camera_pose, belief, obj_tp, rgb_image,
     if len(real_world_coords) > 0:
         found_obj = True
 
-        np.save(f'/robodata/user_data/npatt/OmniGibson/debug/grounding_dino_bb_images/real_coords_{iteration}.npy', real_world_coords)
+        #np.save(f'/robodata/user_data/npatt/OmniGibson/debug/grounding_dino_bb_images/real_coords_{iteration}.npy', real_world_coords)
         #np.save(f'/robodata/user_data/npatt/OmniGibson/debug/grounding_dino_bb_images/boxes_{iteration}.npy', bboxes)
-        np.save(f'/robodata/user_data/npatt/OmniGibson/debug/grounding_dino_bb_images/image_{iteration}.npy', np.array(state['robot0:eyes:Camera:0']['rgb']))
-        np.save(f'/robodata/user_data/npatt/OmniGibson/debug/grounding_dino_bb_images/depth_linear_image_{iteration}.npy', np.array(state['robot0:eyes:Camera:0']['depth_linear']))
-        np.save(f'/robodata/user_data/npatt/OmniGibson/debug/grounding_dino_bb_images/depth_image_{iteration}.npy', np.array(state['robot0:eyes:Camera:0']['depth']))
+        #np.save(f'/robodata/user_data/npatt/OmniGibson/debug/grounding_dino_bb_images/image_{iteration}.npy', np.array(state['robot0:eyes:Camera:0']['rgb']))
+        #np.save(f'/robodata/user_data/npatt/OmniGibson/debug/grounding_dino_bb_images/depth_linear_image_{iteration}.npy', np.array(state['robot0:eyes:Camera:0']['depth_linear']))
+        #np.save(f'/robodata/user_data/npatt/OmniGibson/debug/grounding_dino_bb_images/depth_image_{iteration}.npy', np.array(state['robot0:eyes:Camera:0']['depth']))
 
     print("First BOXES")
     Rotation = np.array([
@@ -1118,8 +1118,8 @@ def get_vox_preds(robot_yaw, camera_pos, camera_pose, belief, obj_tp, rgb_image,
                         # Use VLM to predict feature
     
     
-    if found_obj:
-        np.save(f'/robodata/user_data/npatt/OmniGibson/debug/voxel_predictions/{iteration}.npy', voxel_preds)
-        np.save(f'/robodata/user_data/npatt/OmniGibson/debug/obstacle_maps/{iteration}.npy', obstacle_map.obstacles)
+    #if found_obj:
+        #np.save(f'/robodata/user_data/npatt/OmniGibson/debug/voxel_predictions/{iteration}.npy', voxel_preds)
+        #np.save(f'/robodata/user_data/npatt/OmniGibson/debug/obstacle_maps/{iteration}.npy', obstacle_map.obstacles)
 
     return voxel_preds, feature_ret_vals, found_obj

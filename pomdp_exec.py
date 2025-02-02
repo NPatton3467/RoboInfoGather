@@ -65,8 +65,8 @@ def get_path(start_pos, child_node, obstacle_map):
 
         cur_node = best_child
 
-    start_loc = obstacle_map.world2vox(np.array([[start_pos[0], start_pos[1]]]))
-    goal_loc = obstacle_map.world2vox(np.array([[cur_node.loc.x, cur_node.loc.y]]))
+    start_loc = obstacle_map.world2vox(np.array([start_pos[0], start_pos[1], 0]))
+    goal_loc = obstacle_map.world2vox(np.array([cur_node.loc.x, cur_node.loc.y, 0]))
     #path = a_star(goal_loc, start_loc, obstacle_map)
 
     return -1, cur_node.loc.theta
@@ -220,8 +220,8 @@ def MCTS_planner_exec(pomdp, obstacle_map, configs, pos, yaw, iteration):
             start_arr = np.array([start.x, start.y, yaw])
             goal_arr = np.array([x,y,t])
             
-            np.save(f'/robodata/user_data/npatt/OmniGibson/debug/MCTS/start_{iteration}.npy', start_arr)
-            np.save(f'/robodata/user_data/npatt/OmniGibson/debug/MCTS/goal_{iteration}.npy', goal_arr)
+            #np.save(f'/robodata/user_data/npatt/OmniGibson/debug/MCTS/start_{iteration}.npy', start_arr)
+            #np.save(f'/robodata/user_data/npatt/OmniGibson/debug/MCTS/goal_{iteration}.npy', goal_arr)
 
 
     return best_next_node, astar_path
@@ -615,7 +615,7 @@ def pomdp_exec_loop(env, pomdp, obstacle_map, config, dino_model):
         
             if found_obj:
                 found_obj = False
-                np.save(f'/robodata/user_data/npatt/OmniGibson/debug/updated_beliefs/{obj_tp}_{iterations}.npy', pomdp.bel[obj_tp].p)
+                #np.save(f'/robodata/user_data/npatt/OmniGibson/debug/updated_beliefs/{obj_tp}_{iterations}.npy', pomdp.bel[obj_tp].p)
 
 
             # Do the same for each feature
