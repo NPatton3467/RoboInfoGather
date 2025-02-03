@@ -130,11 +130,19 @@ class ObjTpBel():
 
             # Update feature vals
             for vox, val in feature_ret_vals:
+                val_shape = self.feature_bels[feature]['vals'].shape
+                if vox[0] >= val_shape[0] or vox[1] >= val_shape[1] or vox[2] >= val_shape[2]:
+                    # Debug shouldn't get here
+                    print("Vox: ", vox)
+                    print("Vals Shape: ", val_shape)
+
                 self.feature_bels[feature]['vals'][vox] = val
+            
+                # Make sure shape is remaining constant
+                assert self.feature_bels[feature]['vals'].shape == self.p.shape
             
             # Make sure shape is remaining constant
             assert self.feature_bels[feature]['bel'].shape == self.p.shape
-            assert self.feature_bels[feature]['vals'].shape == self.p.shape
 
     
     def get_visualization(self):

@@ -1144,8 +1144,8 @@ def get_vox_preds(vlm, robot_yaw, camera_pos, camera_pose, belief, obj_tp, rgb_i
             print("MAP: ", vx, vy, vz)
 
             # Put score in prediction output
-            if vx < map_size and vx >= 0 and\
-                    vy < map_size and vy >= 0 and\
+            if vx < voxel_preds.shape[0] and vx >= 0 and\
+                    vy < voxel_preds.shape[1] and vy >= 0 and\
                     vz < voxel_preds.shape[2] and vz >= 0:
                 if config['observation_calc_params']['use_model_score']:
                     voxel_preds[vx, vy, vz] = score
