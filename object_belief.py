@@ -6,7 +6,7 @@ from RoboInfoGather.map_utils import *
 class ObjTpBel():
     def __init__(self, num, threshold, map_params, configs, relevant_features=None):
         self.num = num # Num objects to be found, If None -> unbounded
-        self.threshold = threshold # Existence threshold
+        self.threshold = 0.75 # threshold # Existence threshold
         self.map_params = map_params
         print("RES: ", map_params['res'])
         print("OG RES: ", map_params['og_res'])
@@ -34,7 +34,9 @@ class ObjTpBel():
         # Need to replicate vertically
         self.z_dim = int(self.configs['rf_params']['map_height'] / self.map_params['z_res'])
         temp_p = [self.p for i in range(self.z_dim)]
-        self.p = np.stack(temp_p, axis=2)
+
+        if self.z_dim > 1:
+            self.p = np.stack(temp_p, axis=2)
 
         print('Belief shape: ', self.p.shape)
 
@@ -124,9 +126,15 @@ class ObjTpBel():
             del(new_log_p)
             del(log_p)
 
+
+
             # Update feature vals
             for vox, val in feature_ret_vals:
                 self.feature_bels[feature]['vals'][vox] = val
+            
+            # Make sure shape is remaining constant
+            assert self.feature_bels[feature]['bel'].shape == self.p.shape
+            assert self.feature_bels[feature]['vals'].shape == self.p.shape
 
     
     def get_visualization(self):

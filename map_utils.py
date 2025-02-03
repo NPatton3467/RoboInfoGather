@@ -61,7 +61,6 @@ def world_to_map(xy, map_resolution, map_size):
     return np.flip((np.array(xy) / map_resolution + map_size / 2.0)).astype(np.int)
 
 def map_to_world(xy, map_resolution, map_size):
-    assert False # Need to consider offset now + non square?
     axis = 0 if len(xy.shape) == 1 else 1
     return np.flip((xy - map_size / 2.0) * map_resolution, axis=axis)
 

@@ -12,6 +12,12 @@ import copy
 
 from matplotlib import pyplot as plt
 
+import openai
+from openai import OpenAI
+f = open('./RoboInfoGather/openaikey.txt', 'r')
+openai_api_key = f.read().rstrip('\n')
+f.close()
+
 def gen_prog_from_nl(nl):
     # Call Synth
     synthesizer = Synthesizer(
@@ -24,6 +30,39 @@ def gen_prog_from_nl(nl):
     new_prog = result.get_program_object()
 
     return new_prog
+
+
+
+def get_nl_answer(query_exec_res, question):
+    prompt = f"Please answer the question:\n`{question}`\n\ngiven the symbolic information:\n{query_exec_res}. Please, only answer the question without any extra explanation provided"
+
+    client = OpenAI(api_key=openai_api_key)
+    response = client.chat.completions.create(
+        model="gpt-4",
+        messages=[{"role": "user", "content": f"{prompt}"}],
+        stream=False,
+        temperature=0.0
+    )
+
+    nl_answer = response.choices[0].message.content
+
+    return nl_answer
+
+def eval_similarity(nl_ans, text_answer):
+    prompt = f"Please evaluate the similarity of the utterance `{nl_ans}` and `{text_answer}` on a scale of 1 to 5. Please only respond with the numerical score."
+
+    client = OpenAI(api_key=openai_api_key)
+    response = client.chat.completions.create(
+        model="gpt-4",
+        messages=[{"role": "user", "content": f"{prompt}"}],
+        stream=False,
+        temperature=0.0
+    )
+
+    str_score = response.choices[0].message.content
+
+    return str_score
+
 
 def get_objects_and_features_helper(component):
     # Start with list and then unify
@@ -62,6 +101,8 @@ def get_objects_and_features_helper(component):
             return obj_feat
 
         elif component.where_tp == "true":
+            return []
+        else:
             return []
 
     elif type(component) is Map or type(component) is Count:

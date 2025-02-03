@@ -79,8 +79,11 @@ class POMDP():
                                 else:
                                     assert False # Shouldn't get here
 
-                            feature_dict['location'] = (x,y,z)
-                            assert False # Make above world coords
+                            map_resolution = local_bel.map_params['res']
+                            map_size = local_bel.map_params['size']
+                            w_xy = map_to_world(np.array([x,y]), map_resolution, map_size)
+                            w_z = z * local_bel.map_params['z_res']
+                            feature_dict['location'] = (w_xy[0],w_xy[1],w_z)
 
                             cur_obj_dict[instance_count] = feature_dict
 
@@ -138,9 +141,14 @@ class POMDP():
         found_all_obj = True
         current_symbolic_query = self.query.execute(symbolic_info)
         for obj_tp in self.bel.keys():
+            if obj_tp not in current_symbolic_query:
+                found_all_obj = False
+                break
+
             num_found = len(current_symbolic_query[obj_tp])
             if num_found < self.bel[obj_tp].num or self.bel[obj_tp].num == -1:
                 found_all_obj = False
+                break
         
         if self.explore_stop == "AKLD":
             akld = self.compute_akld(iterations)

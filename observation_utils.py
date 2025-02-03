@@ -218,7 +218,7 @@ def get_world_coords_from_depth(x, y, depth, camera_pos, robot_yaw, camera_intri
 
 def get_fov_from_depth_image(camera_pos, robot_yaw, raw_depth_image, voxel_preds, resolution, z_res, size, config, cam_int_mat):
     # Max pool to decrease image size
-    depth_image = skimage.measure.block_reduce(raw_depth_image, (8,8), np.min)
+    depth_image = skimage.measure.block_reduce(raw_depth_image, (16,16), np.min)
     print("Got Depth Image... Shape: ", depth_image.shape)
 
     # Set to zero up to obstacle
@@ -471,7 +471,7 @@ def get_centroid_coords(bbox, robot_yaw, camera_pos, camera_ori, depth_image, de
     return n_point[0], n_point[1], (lz+rz)/2.0, ldepth, ldepth_linear, correct
 
 
-def obj_detection(dino_model, obj_tp, rgb_img, depth_img, config, camera_pos, robot_yaw, use_GD=True, tp='MANUAL', feature=None):
+def obj_detection(vlm, cam_int_mat, dino_model, obj_tp, rgb_img, depth_img, config, camera_pos, robot_yaw, use_GD=True, tp='MANUAL', feature=None):
     if use_GD:
         img = rgb_img
         #Image should be torch tensor
@@ -500,49 +500,35 @@ def obj_detection(dino_model, obj_tp, rgb_img, depth_img, config, camera_pos, ro
             )
 
         feature_ret_vals = [] 
-        if feature != None:
-            for box in boxes:
-                cropped_img = rgb_img
+        real_world_coords = []
+        for box in boxes:
+            cropped_img = rgb_img
+            p_x = int(box[0] * cropped_img.shape[1])
+            p_y = int(box[1] * cropped_img.shape[0])
 
+            cur_depth = depth_img[p_y, p_x]
+
+            real_world_coords.append(get_world_coords_from_depth(p_x, p_y, cur_depth, camera_pos, robot_yaw, cam_int_mat))
+            if feature != None:
                 x_min = int((box[0] - box[2]) * cropped_img.shape[1])
                 x_max = int((box[0] + box[2]) * cropped_img.shape[1])
                 y_min = int((box[1] - box[3]) * cropped_img.shape[0])
                 y_max = int((box[1] + box[3]) * cropped_img.shape[0])
 
-                cropped_img = cropped_img[y_min:y_max, x_min:x_max, :]
+                # Don't want to crop to practically 0 pixels
+                if (x_max - x_min) >= 5 and (y_max - y_min) >= 5:
+                    cropped_img = cropped_img[y_min:y_max, x_min:x_max, :]
+                
                 img = Image.fromarray(cropped_img).convert('RGB')
-                transform = T.Compose(
-                    [
-                        T.RandomResize([800], max_size=1333),
-                        T.ToTensor(),
-                        T.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225]),
-                    ]
-                )
-                img, _ = transform(img, None)
         
                 # Query VLM
-                prompt += f"Given the image and object type `{obj_tp}`, what is the value of the feature `{feature}`? Please respond with only a single word, answering the above question."
-                PROMPT_MESSAGES = [
-                    {
-                        "role": "user",
-                        "content": [
-                            f"{prompt}",
-                            *map({"image": img, "resize": 128}, base64Frames[1000:1500:20]),
-                        ],
-                    },
-                ]
-                params = {
-                    "model": "gpt-4-vision-preview",
-                    "messages": PROMPT_MESSAGES,
-                    #"max_tokens": 200,
-                }
+                prompt = f"Given the image and object type `{obj_tp}`, what is the value of the feature `{feature}`? Please respond with only a single word, answering the above question."
 
-                result = client.chat.completions.create(**params)
-                response = result.choices[0].message.content
+                response = vlm.generate(prompt, img)
 
                 feature_ret_vals.append(response)
 
-        return boxes, feature_ret_vals, logits
+        return boxes, real_world_coords, feature_ret_vals, logits
     elif tp == 'MANUAL': # Manual labelled points
         def in_fov(chair_loc, camera_pos, robot_yaw, ang):
             # Get FOV boundaries
@@ -1091,7 +1077,7 @@ def check_cluster(x, y, z, belief):
         belief.clusters.append((p, 1))
         return p[0], p[1], p[2]
 
-def get_vox_preds(robot_yaw, camera_pos, camera_pose, belief, obj_tp, rgb_image, depth_image, dino_model, config, obstacle_map, camera_intrinsic_mat, feature=None, iteration=0):
+def get_vox_preds(vlm, robot_yaw, camera_pos, camera_pose, belief, obj_tp, rgb_image, depth_image, dino_model, config, obstacle_map, camera_intrinsic_mat, feature=None, iteration=0):
     """
     Function to get predicted value of existence at each voxel (for an object type) 
     give observation
@@ -1119,7 +1105,7 @@ def get_vox_preds(robot_yaw, camera_pos, camera_pose, belief, obj_tp, rgb_image,
     print("Starting FOV")
     voxel_preds = get_fov_from_depth_image(camera_pos, robot_yaw, depth_image, voxel_preds, resolution, belief.map_params['z_res'], size, config, camera_intrinsic_mat)
     
-    real_world_coords, feature_ret_vals, logits = obj_detection(dino_model, obj_tp, rgb_image, depth_image, config, camera_pos, robot_yaw, feature=feature)
+    boxes, real_world_coords, feature_ret_vals, logits = obj_detection(vlm, camera_intrinsic_mat, dino_model, obj_tp, rgb_image, depth_image, config, camera_pos, robot_yaw, feature=feature)
     # Get the corresponding voxels
     found_obj = False
     if len(real_world_coords) > 0:
@@ -1158,14 +1144,16 @@ def get_vox_preds(robot_yaw, camera_pos, camera_pose, belief, obj_tp, rgb_image,
             print("MAP: ", vx, vy, vz)
 
             # Put score in prediction output
-            if vx < map_size and vy < map_size and vz < voxel_preds.shape[2]:
+            if vx < map_size and vx >= 0 and\
+                    vy < map_size and vy >= 0 and\
+                    vz < voxel_preds.shape[2] and vz >= 0:
                 if config['observation_calc_params']['use_model_score']:
                     voxel_preds[vx, vy, vz] = score
                 else:
                     voxel_preds[vx, vy, vz] = config['observation_calc_params']['prob_correct_given_observed'] 
 
-            if feature != None:
-                feature_vox_ret_vals.append([np.array([vx, vy, vz]), feature_ret_vals[i]])
+                if feature != None:
+                    feature_vox_ret_vals.append([np.array([vx, vy, vz]), feature_ret_vals[i]])
             
     
     #if found_obj:
