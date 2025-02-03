@@ -32,7 +32,7 @@ class ObjTpBel():
         #self.p = np.where((self.p == 255), 0.5, 0)
 
         # Need to replicate vertically
-        self.z_dim = int(self.configs['rf_params']['map_height'] / self.map_params['z_res'])
+        self.z_dim = max(2, int(self.configs['rf_params']['map_height'] / self.map_params['z_res']))
         temp_p = [self.p for i in range(self.z_dim)]
 
         if self.z_dim > 1:
@@ -136,7 +136,7 @@ class ObjTpBel():
                     print("Vox: ", vox)
                     print("Vals Shape: ", val_shape)
 
-                self.feature_bels[feature]['vals'][vox] = val
+                self.feature_bels[feature]['vals'][vox[0], vox[1], vox[2]] = val
             
                 # Make sure shape is remaining constant
                 assert self.feature_bels[feature]['vals'].shape == self.p.shape

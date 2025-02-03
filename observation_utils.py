@@ -238,6 +238,9 @@ def get_fov_from_depth_image(camera_pos, robot_yaw, raw_depth_image, voxel_preds
 
                 if not np.isnan(world_coords[2]):
                     vz = int(world_coords[2] / z_res)
+
+                    print(f"Voxel: ({v_xy[0]}, {v_xy[1]}, {vz})")
+                    print(f"Vox Pred Shape: ", voxel_preds.shape)
                     
                     if v_xy[0] in range(0, size) and v_xy[1] in range(0, size) and vz in range(0, voxel_preds.shape[2]):
                         voxel_preds[v_xy[0], v_xy[1], vz] = config['observation_calc_params']['prob_occ_given_obs_free']

@@ -1,4 +1,11 @@
 import copy
+import numpy as np
+
+import openai
+from openai import OpenAI
+f = open('./RoboInfoGather/openaikey.txt', 'r')
+openai_api_key = f.read().rstrip('\n')
+f.close()
 
 class Prog:
     def __init__(self, expressions):
@@ -364,9 +371,21 @@ class WhereClause:
             temp_dict2 = {}
             for inst1 in symbolic_info[self.obj_tp]:
                 for inst2 in symbolic_info[self.obj_tp2]:
-                    dist = np.norm(symbolic_info[self.obj_tp][inst1]['location'] - 
-                                    symbolic_info[self.obj_tp2][inst2]['location'])
-                    if dist <= asdfasdf:
+                    # Query LLM for spatial rel
+                    loc1 = symbolic_info[self.obj_tp][inst1]['location']
+                    loc2 = symbolic_info[self.obj_tp2][inst2]['location']
+                    prompt = f"Give object (1) of type {self.obj_tp} with location {loc1}, and object (2) of type {self.obj_tp2} with location {loc2}. Is object (1) {self.spatial_relation} object (2)? Please answer with only True or False." 
+                    client = OpenAI(api_key=openai_api_key)
+                    response = client.chat.completions.create(
+                        model="gpt-4",
+                        messages=[{"role": "user", "content": f"{prompt}"}],
+                        stream=False,
+                        temperature=0.0
+                    )
+
+                    # Extract grid size
+                    response = response.choices[0].message.content
+                    if response == "True" or response == "true":
                         temp_dict1[inst1] = symbolic_info[self.obj_tp][inst1]
                         temp_dict2[inst2] = symbolic_info[self.obj_tp2][inst2]
 
