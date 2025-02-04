@@ -73,12 +73,8 @@ class POMDP():
                             # Check features (this is only enum features)
                             feature_dict = {}
                             for feature in local_bel.feature_bels:
-                                if local_bel.feature_bels[feature]['tp'] == 'feature_enum' or\
-                                    local_bel.feature_bels[feature]['tp'] == 'feature_scalar':
-                                    feature_dict[feature] = local_bel.feature_bels[feature]['bel'][x,y,z]                                
-                                else:
-                                    assert False # Shouldn't get here
-
+                                feature_dict[feature] = local_bel.feature_bels[feature]['vals'][x,y,z]                                
+                            
                             map_resolution = local_bel.map_params['res']
                             map_size = local_bel.map_params['size']
                             w_xy = map_to_world(np.array([x,y]), map_resolution, map_size)

@@ -146,7 +146,8 @@ class GetNth:
 
         if self.result == None:
             key = list(self.list.result.keys())[self.index]
-            self.result = self.list.result[key]
+            if key in self.list.result:
+                self.result = self.list.result[key]
 
         return self.result
 
@@ -168,7 +169,8 @@ class Count:
             self.query.execute(symbolic_info)
 
         if self.result == None:
-            self.result = len(self.query.result[self.obj_tp])
+            if self.obj_tp in self.query.result:
+                self.result = len(self.query.result[self.obj_tp])
 
         return self.result
 
@@ -191,12 +193,12 @@ class Aggregator:
 
         if self.result == None:
             if self.agg_tp == "sum":
-                sum = 0
+                tsum = 0
                 
                 for key in self.list.result:
-                    sum += self.list.result[key]
+                    tsum += self.list.result[key]
 
-                self.result = sum
+                self.result = tsum
 
             elif self.agg_tp == "avg":
                 avg = 0
@@ -207,22 +209,22 @@ class Aggregator:
                 self.result = avg/len(self.list.result)
 
             elif self.agg_tp == "min":
-                min = -1
+                tmin = -1
 
                 for key in self.list.result:
-                    if self.list.result[key] < min or min == -1:
-                        min = self.list.result[key]
+                    if self.list.result[key] < tmin or tmin == -1:
+                        tmin = self.list.result[key]
 
-                self.result = min
+                self.result = tmin
 
             elif self.agg_tp == "max":
-                max = -1
+                tmax = -1
 
-                for key in self.list:
-                    if self.list.result[key] > max or max == -1:
-                        max = self.list.result[key]
+                for key in self.list.result:
+                    if self.list.result[key] > tmax or tmax == -1:
+                        tmax = self.list.result[key]
 
-                self.result = max
+                self.result = tmax
 
         return self.result
 
@@ -250,8 +252,8 @@ class Query:
         if self.result == None:
             self.result = self.where_clause.filter(copy.deepcopy(symbolic_info))
 
-            if len(self.result[self.obj_tp]) > self.limit and self.limit > 0:
-                self.result = self.result[self.obj_tp][0:self.limit]
+            if self.obj_tp in self.result and len(self.result[self.obj_tp]) > self.limit and self.limit > 0:
+                self.result[self.obj_tp] = self.result[self.obj_tp][0:self.limit]
 
         return self.result
 
