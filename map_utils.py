@@ -63,33 +63,3 @@ def world_to_map(xy, map_resolution, map_size):
 def map_to_world(xy, map_resolution, map_size):
     axis = 0 if len(xy.shape) == 1 else 1
     return np.flip((xy - map_size / 2.0) * map_resolution, axis=axis)
-
-def get_trav_map(maps_path, floor, resolution, og_resolution):
-        """
-        Loads the traversability map
-        """
-
-        if not os.path.exists(maps_path):
-            assert False
-            log.warning("trav map does not exist: {}".format(maps_path))
-            return
-
-        map_size = None
-        trav_map = np.array(Image.open(os.path.join(maps_path, "floor_trav_no_obj_{}.png".format(floor))))
-
-        # If we do not initialize the original size of the traversability map, we obtain it from the image
-        # Then, we compute the final map size as the factor of scaling (default_resolution/resolution) times the
-        # original map size
-        height, width = trav_map.shape
-        map_default_resolution = og_resolution
-        map_size = int(
-            height * map_default_resolution / resolution
-        )
-
-        # We resize the traversability map to the new size computed before
-        trav_map = cv2.resize(trav_map, (map_size, map_size))
-
-        # We make the pixels of the image to be either 0 or 255
-        trav_map[trav_map < 255] = 0
-
-        return trav_map

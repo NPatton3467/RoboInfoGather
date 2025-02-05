@@ -12,8 +12,6 @@ class ObjTpBel():
         print("OG RES: ", map_params['og_res'])
         
 
-        #self.trav_map = get_trav_map(configs['scene']['trav_map_path'], configs['scene']['floor'], map_params['res'], map_params['og_res'])
-
         # TODO: Will want to update trav map as we go
         self.trav_map = np.zeros((map_params['size'], map_params['size']))
 
