@@ -14,7 +14,7 @@ from matplotlib import pyplot as plt
 
 import openai
 from openai import OpenAI
-f = open('./RoboInfoGather/openaikey.txt', 'r')
+f = open('/robodata/user_data/npatt/explore-eqa/RoboInfoGather/openaikey.txt', 'r')
 openai_api_key = f.read().rstrip('\n')
 f.close()
 

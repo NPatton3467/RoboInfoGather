@@ -14,7 +14,7 @@ from PIL import Image
 
 
 # Load the config
-config_filename = os.path.join(f"./RoboInfoGather/info_gather.yaml")
+config_filename = os.path.join(f"/robodata/user_data/npatt/explore-eqa/RoboInfoGather/info_gather.yaml")
 config = yaml.load(open(config_filename, "r"), Loader=yaml.FullLoader)
 
 # Get trav_map

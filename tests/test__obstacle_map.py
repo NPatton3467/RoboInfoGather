@@ -9,7 +9,7 @@ from RoboInfoGather.obstacle_map import *
 from matplotlib import pyplot as plt
 
  # Load the config
-config_filename = os.path.join(f"./RoboInfoGather/info_gather.yaml")
+config_filename = os.path.join(f"/robodata/user_data/npatt/explore-eqa/RoboInfoGather/info_gather.yaml")
 config = yaml.load(open(config_filename, "r"), Loader=yaml.FullLoader)
 
 # check if we want to quick load or full load the scene
