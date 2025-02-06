@@ -41,7 +41,7 @@ class SynthesisResult:
         This method assumes the model output contains a Python code definition for an object named 'program'.
         """
         local_scope = {}
-        print(self.model_output)
+        
         try:
             exec(self.model_output, globals(), local_scope)
         except Exception as e:
@@ -101,15 +101,17 @@ class Synthesizer:
         """
 
         # Add the preamble.
-        messages = [{"role": "system", "content": self.preamble}]
-
+        prompt = self.preamble
         # Add examples.
         for example in self.examples["Examples"]:
-            messages.append({"role": "user", "content": example["prompt"]})
-            messages.append({"role": "system", "content": example["program"]})
+            ex_prompt = example["prompt"]
+            ex_prog = example["program"]
+            prompt += f"\n{ex_prompt}:\n{ex_prog}\n"
 
         # Add the user query to the message.
-        messages.append({"role": "user", "content": input_query})
+        prompt += input_query
+
+        messages = [{"role": "system", "content": prompt}]
 
         # Call the LLM and get the textual response.
         response = openai_generate_completion(

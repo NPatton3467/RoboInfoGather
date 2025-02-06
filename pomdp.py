@@ -49,6 +49,14 @@ class POMDP():
                 self.figures[obj_tp] = (fig, ax)
 
 
+    def pretty_str(self):
+        ret_str = ""
+        for obj_tp in self.bel.keys():
+            ret_str += self.bel[obj_tp].pretty_str(obj_tp)
+
+        return ret_str
+
+
     def eval_reward(self, obstacle_map, root, node):
         reward = 0
         for obj_tp in self.reward_funcs.keys():

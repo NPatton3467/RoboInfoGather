@@ -261,7 +261,7 @@ class Query:
 class WhereClause:
     def __init__(self, where_tp, obj_tp, sub_where_clause=None, obj_tp2=None, 
         scalar_feature=None, scalar_param=None, scalar_comparator=None, enum_feature=None, enum_param=None,
-        spatial_relation=None):
+        spatial_relation=None, is_temp=False):
 
         self.where_tp = where_tp
         self.obj_tp = obj_tp
@@ -273,6 +273,28 @@ class WhereClause:
         self.enum_feature = enum_feature
         self.enum_param = enum_param
         self.spatial_relation = spatial_relation
+
+        # Assertions for well-formedness
+        if not is_temp:
+            if self.where_tp == "and" or self.where_tp == "or":
+                assert len(self.sub_where_clause) == 2
+
+            if self.where_tp == "not":
+                assert len(self.sub_where_clause) == 1
+
+            if self.where_tp == "feature_enum":
+                assert self.enum_feature is not None and self.enum_param is not None
+
+            if self.where_tp == "feature_scalar":
+                assert self.scalar_comparator is not None and self.scalar_feature is not None and self.scalar_param is not None
+
+            if self.where_tp == "max" or self.where_tp == "min":
+                assert self.scalar_feature is not None
+
+            if self.where_tp == "spatial_rel":
+                assert self.spatial_relation is not None and self.obj_tp2 is not None
+
+
 
     def pretty_str(self):
         if self.where_tp == "feature_enum":

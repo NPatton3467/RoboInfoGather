@@ -18,7 +18,7 @@ f = open('/robodata/user_data/npatt/explore-eqa/RoboInfoGather/openaikey.txt', '
 openai_api_key = f.read().rstrip('\n')
 f.close()
 
-def gen_prog_from_nl(nl):
+def gen_prog_from_nl(nl_question):
     # Call Synth
     synthesizer = Synthesizer(
         config_file_path="RoboInfoGather/synthesis/synthesis_config.yaml",
@@ -26,7 +26,8 @@ def gen_prog_from_nl(nl):
         preamble_file_path="RoboInfoGather/synthesis/prompt_preamble.txt",
     )
 
-    result = synthesizer.generate(nl)
+    query = f"Given the question `{nl_question}`, please provide a valid python program. Do not include any explanation, however you may include any necessary sub clauses, or queries."
+    result = synthesizer.generate(query)
     new_prog = result.get_program_object()
 
     return new_prog
@@ -129,7 +130,6 @@ def get_objects_and_features(query):
 
     # Unify
     obj_feat_dict = {}
-    print(obj_feat_list)
     for obj, feat, tp in obj_feat_list:
         if obj in obj_feat_dict:
             if feat not in obj_feat_dict[obj]:
@@ -147,10 +147,10 @@ def gen_pomdp_from_query(query, pos, yaw, trav_map_og_size, trav_map_og_res, con
         # Add map feature to where clause for feature extraction
         query_to_send = copy.deepcopy(query.query)
         if query.map_tp == 'feature_scalar':
-            temp_where = WhereClause(where_tp=query.map_tp, obj_tp=query.obj_tp, scalar_feature=query.map_feature)
+            temp_where = WhereClause(where_tp=query.map_tp, obj_tp=query.obj_tp, scalar_feature=query.map_feature, is_temp=True)
         else:
-            temp_where = WhereClause(where_tp=query.map_tp, obj_tp=query.obj_tp, enum_feature=query.map_feature)
-        temp_where_and = WhereClause(where_tp='and', obj_tp=query.obj_tp, sub_where_clause=[temp_where, query_to_send.where_clause])
+            temp_where = WhereClause(where_tp=query.map_tp, obj_tp=query.obj_tp, enum_feature=query.map_feature, is_temp=True)
+        temp_where_and = WhereClause(where_tp='and', obj_tp=query.obj_tp, sub_where_clause=[temp_where, query_to_send.where_clause], is_temp=True)
         query_to_send.where_clause = temp_where_and
         return gen_pomdp_from_query(query_to_send, pos, yaw, trav_map_og_size, trav_map_og_res, configs, prev_pomdp, gen_inform_priors)
     if type(query) is Primitives:

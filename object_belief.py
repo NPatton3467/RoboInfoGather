@@ -8,9 +8,6 @@ class ObjTpBel():
         self.num = num # Num objects to be found, If None -> unbounded
         self.threshold = 0.75 # threshold # Existence threshold
         self.map_params = map_params
-        print("RES: ", map_params['res'])
-        print("OG RES: ", map_params['og_res'])
-        
 
         # TODO: Will want to update trav map as we go
         self.trav_map = np.zeros((map_params['size'], map_params['size']))
@@ -24,8 +21,6 @@ class ObjTpBel():
         self.p = self.p * 0.5
         self.p = np.where(self.trav_map == 0, -1, self.p)
 
-        print(f'Belief Created with (xdim, y_dim) = ({self.p.shape})')
-
         # Start with uniform prior, where traversable
         #self.p = np.where((self.p == 255), 0.5, 0)
 
@@ -36,7 +31,6 @@ class ObjTpBel():
         if self.z_dim > 1:
             self.p = np.stack(temp_p, axis=2)
 
-        print('Belief shape: ', self.p.shape)
 
         # For copying later if we get new features to evaluate
         self.backup_p = np.copy(self.p)
@@ -68,6 +62,17 @@ class ObjTpBel():
                     else:
                         assert False # Shouldn't get here
 
+    
+    def pretty_str(self, tp):
+        ret_str = "Object: " + str(tp) + " Width: " + str(self.map_params['res']) \
+                    + " Height: " + str(self.map_params['z_res']) + "\n"
+        
+        if len(self.feature_bels.keys()) > 0:
+            ret_str += "\tFeatures:\n"
+            for feature in self.feature_bels.keys():
+                ret_str += "\t\t" + str(feature) + "\n"
+
+        return ret_str
 
 
     def update(self, obs, eps=1e-6, feature=None, feature_ret_vals=None):
