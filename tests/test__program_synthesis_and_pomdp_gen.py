@@ -63,7 +63,8 @@ def main(cfg):
                 "init_angle": float(row["init_angle"]),
             }
 
-    for question_ind in range(10):
+    #for question_ind in range(10):
+    for question_ind in tqdm(range(len(questions_data))):
 
         # Extract question
         question_data = questions_data[question_ind]
@@ -144,40 +145,43 @@ def main(cfg):
         # Generate program
         attempts = 0
         prog = None
-        while attempts < 30:
-            attempts += 1
-            try:
-                prog = gen_prog_from_nl(question)
-                break
-            except Exception as e:
-                print(f"Could not generate program, attempt {attempts}")
+        pomdp = None
 
-        print(f"\nQuestion:\n{question}\nProgram: ")
-        print(prog.pretty_str())
         resolution = cfg.tsdf_grid_size
         size = int(max(abs(tsdf_bnds[0][0] - tsdf_bnds[0][1]), abs(tsdf_bnds[1][0] - tsdf_bnds[1][1])) / resolution)
 
         #This format: np.array([-way_point.loc.y, pts[1], way_point.loc.x])
         pos = pos_habitat_to_normal(pts)
-        if type(prog) is Prog:
-            pomdp = gen_pomdp_from_query(
-                    query=prog.expressions[0],
-                    pos=pos,
-                    yaw=angle,
-                    trav_map_og_size=size,
-                    trav_map_og_res=resolution,
-                    configs=RIG_config
-                )
-        else:
-            pomdp = gen_pomdp_from_query(
-                    query=prog,
-                    pos=pos,
-                    yaw=angle,
-                    trav_map_og_size=size,
-                    trav_map_og_res=resolution,
-                    configs=RIG_config
-                )
+        
+        while True:
+            attempts += 1
+            try:
+                prog = gen_prog_from_nl(question)
+                if type(prog) is Prog:
+                    pomdp = gen_pomdp_from_query(
+                            query=prog.expressions[0],
+                            pos=pos,
+                            yaw=angle,
+                            trav_map_og_size=size,
+                            trav_map_og_res=resolution,
+                            configs=RIG_config
+                        )
+                else:
+                    pomdp = gen_pomdp_from_query(
+                            query=prog,
+                            pos=pos,
+                            yaw=angle,
+                            trav_map_og_size=size,
+                            trav_map_og_res=resolution,
+                            configs=RIG_config
+                        )
+                break
 
+            except Exception as e:
+                print(f"Could not generate program, attempt {attempts}")
+
+        print(f"\nQuestion:\n{question}\nProgram: ")
+        print(prog.pretty_str())
         print("\nPOMDP: ")
         print(pomdp.pretty_str())
         

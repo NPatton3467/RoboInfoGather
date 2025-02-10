@@ -111,7 +111,7 @@ class Synthesizer:
         # Add the user query to the message.
         prompt += input_query
 
-        messages = [{"role": "system", "content": prompt}]
+        messages = [{"role": "system", "content": prompt, "temperature":0.25}]
 
         # Call the LLM and get the textual response.
         response = openai_generate_completion(

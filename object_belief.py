@@ -10,7 +10,8 @@ class ObjTpBel():
         self.map_params = map_params
 
         # TODO: Will want to update trav map as we go
-        self.trav_map = np.zeros((map_params['size'], map_params['size']))
+        size_to_use = max(2, map_params['size'])
+        self.trav_map = np.zeros((size_to_use, size_to_use))
 
         self.configs = configs
         self.relevant_features = relevant_features
@@ -64,7 +65,7 @@ class ObjTpBel():
 
     
     def pretty_str(self, tp):
-        ret_str = "Object: " + str(tp) + " Width: " + str(self.map_params['res']) \
+        ret_str = "Object: " + str(tp) + "\n\tWidth: " + str(self.map_params['res']) \
                     + " Height: " + str(self.map_params['z_res']) + "\n"
         
         if len(self.feature_bels.keys()) > 0:
@@ -77,6 +78,7 @@ class ObjTpBel():
 
     def update(self, obs, eps=1e-6, feature=None, feature_ret_vals=None):
         if feature is None:
+            pre_shape = self.p.shape
             # Update Belief using Binary Bayes Filter
             log_p = np.where(self.p > 0, np.log((self.p+eps)/(1-self.p+eps)), 0)
 
@@ -100,6 +102,9 @@ class ObjTpBel():
             del(inv_sensor_model)
             del(new_log_p)
             del(log_p)
+
+            # Enforce shape
+            assert pre_shape == self.p.shape
 
             print("Done Update")
         else:
