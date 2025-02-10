@@ -549,6 +549,7 @@ print("\nResult:\n", result)
 print("\n\n")
 
 
+"""
 # Avg Cup Volume where red + average bowl volume where blue
 print("Avg Cup Vol Where red + avg bowl volume where blue")
 new_where_cup = WhereClause(where_tp='feature_enum', obj_tp="cup", enum_feature='colour', enum_param='red')
@@ -626,3 +627,5 @@ print("Symbolic Info: ", symbolic_info)
 result = new_prim.execute(symbolic_info)
 print("\nResult:\n", result)
 print("\n\n")
+
+"""

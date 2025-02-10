@@ -1,0 +1,19 @@
+You are tasked with evaluating whether a given spatial relationship holds between two objects, given their type and the x,y,z coordinates of their centroid. Take into account the average sizes of the objects, and their relative positions to estimate.
+
+```
+Example 1:
+Now given object (1) of type cup centered (10,10,5.5), and object (2) of type counter with centered (9,8,5). Is object (1) on object (2)? Please answer with only True or False.
+Answer : True
+```
+This example returns True because object (1) is slightly higher than object (2) and given the average dimensions of these objects, the cup is likely within the countertop's bounds given the two centroids.
+
+
+```
+Example 2:
+Now given object (1) of type keyboard centered (1,20,2.5), and object (2) of type monitor with centered (2,8,5). Is object (1) near object (2)? Please answer with only True or False.
+Answer : False
+```
+This example returns False because object (1) has a y dimension much greater than object (2) and based on the average sizes of these objects, they are likely quite far apart.
+
+
+

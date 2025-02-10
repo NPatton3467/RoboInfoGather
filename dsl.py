@@ -46,8 +46,12 @@ class Map:
 
         if self.result == {}:
             if self.obj_tp in self.query.result:
+                local_dict = {}
                 for obj_inst in self.query.result[self.obj_tp]:
-                    self.result[obj_inst] = self.query.result[self.obj_tp][obj_inst][self.map_feature]
+                    local_dict[obj_inst] = {}
+                    local_dict[obj_inst][self.map_feature] = self.query.result[self.obj_tp][obj_inst][self.map_feature]
+
+                self.result[self.obj_tp] = local_dict
 
         return self.result
 
@@ -134,7 +138,7 @@ class GetNth:
         self.index = index 
 
         # Result
-        self.result = None
+        self.result = {}
 
     def pretty_str(self):
         return f"getNth({self.list.pretty_str()}, {self.index})"
@@ -144,10 +148,12 @@ class GetNth:
         if self.list.result == {}:
             self.list.execute(symbolic_info)
 
-        if self.result == None:
-            key = list(self.list.result.keys())[self.index]
-            if key in self.list.result:
-                self.result = self.list.result[key]
+        if self.result == {}:
+            obj_tp = list(self.list.result.keys())[0]
+            if obj_tp in self.list.result:
+                key = list(self.list.result[obj_tp].keys())[self.index]
+                if key in self.list.result[obj_tp]:
+                    self.result[obj_tp] = self.list.result[obj_tp][key]
 
         return self.result
 
@@ -158,7 +164,7 @@ class Count:
         self.obj_tp = obj_tp
 
         # Result
-        self.result = None
+        self.result = {}
 
     def pretty_str(self):
         return f"count({self.query.pretty_str()}, {self.obj_tp})"
@@ -168,9 +174,9 @@ class Count:
         if self.query.result == None:
             self.query.execute(symbolic_info)
 
-        if self.result == None:
+        if self.result == {}:
             if self.obj_tp in self.query.result:
-                self.result = len(self.query.result[self.obj_tp])
+                self.result[self.obj_tp] = {"Count" : len(self.query.result[self.obj_tp])}
 
         return self.result
 
@@ -194,37 +200,49 @@ class Aggregator:
         if self.result == None:
             if self.agg_tp == "sum":
                 tsum = 0
-                
-                for key in self.list.result:
-                    tsum += self.list.result[key]
+                obj_tp = list(self.list.result.keys())[0]
 
-                self.result = tsum
+                if obj_tp in self.list.result:
+                    for inst in self.list.result[obj_tp]:
+                        feature = list(self.list.result[obj_tp][inst].keys())[0]
+                        tsum += self.list.result[obj_tp][inst][feature]
+
+                self.result = {obj_tp : {f'Total {feature}' : tsum}}
 
             elif self.agg_tp == "avg":
                 avg = 0
+                obj_tp = list(self.list.result.keys())[0]
 
-                for key in self.list.result:
-                    avg += self.list.result[key]
+                if obj_tp in self.list.result:
+                    for inst in self.list.result[obj_tp]:
+                        feature = list(self.list.result[obj_tp][inst].keys())[0]
+                        avg += self.list.result[obj_tp][inst][feature]
 
-                self.result = avg/len(self.list.result)
+                self.result = {obj_tp : {f'Average {feature}' : avg/len(self.list.result[obj_tp])}}
 
             elif self.agg_tp == "min":
                 tmin = -1
+                obj_tp = list(self.list.result.keys())[0]
 
-                for key in self.list.result:
-                    if self.list.result[key] < tmin or tmin == -1:
-                        tmin = self.list.result[key]
+                if obj_tp in self.list.result:
+                    for inst in self.list.result[obj_tp]:
+                        feature = list(self.list.result[obj_tp][inst].keys())[0]
+                        if self.list.result[obj_tp][inst][feature] < tmin or tmin == -1:
+                            tmin += self.list.result[obj_tp][inst][feature]
 
-                self.result = tmin
+                self.result = {obj_tp : {f'Minimum {feature}' : tmin}}
 
             elif self.agg_tp == "max":
                 tmax = -1
+                obj_tp = list(self.list.result.keys())[0]
 
-                for key in self.list.result:
-                    if self.list.result[key] > tmax or tmax == -1:
-                        tmax = self.list.result[key]
+                if obj_tp in self.list.result:
+                    for inst in self.list.result[obj_tp]:
+                        feature = list(self.list.result[obj_tp][inst].keys())[0]
+                        if self.list.result[obj_tp][inst][feature] > tmax or tmax == -1:
+                            tmax += self.list.result[obj_tp][inst][feature]
 
-                self.result = tmax
+                self.result = {obj_tp : {f'Maximum {feature}' : tmax}}
 
         return self.result
 
@@ -402,9 +420,13 @@ class WhereClause:
                     if self.obj_tp2 in symbolic_info:
                         for inst2 in symbolic_info[self.obj_tp2]:
                             # Query LLM for spatial rel
+                            f = open('./RoboInfoGather/spatial_rel_pre_prompt.txt', 'r')
+                            pre_prompt = f.read()
+                            f.close()
+                            
                             loc1 = symbolic_info[self.obj_tp][inst1]['location']
                             loc2 = symbolic_info[self.obj_tp2][inst2]['location']
-                            prompt = f"Give object (1) of type {self.obj_tp} with location {loc1}, and object (2) of type {self.obj_tp2} with location {loc2}. Is object (1) {self.spatial_relation} object (2)? Please answer with only True or False." 
+                            prompt = pre_prompt + f"\n\nNow given object (1) of type {self.obj_tp} with location {loc1}, and object (2) of type {self.obj_tp2} with location {loc2}. Is object (1) {self.spatial_relation} object (2)? Please answer with only True or False.\nAnswer : " 
                             client = OpenAI(api_key=openai_api_key)
                             response = client.chat.completions.create(
                                 model="gpt-4",
@@ -413,7 +435,7 @@ class WhereClause:
                                 temperature=0.0
                             )
 
-                            # Extract grid size
+                            # Extract response
                             response = response.choices[0].message.content
                             if response == "True" or response == "true":
                                 temp_dict1[inst1] = symbolic_info[self.obj_tp][inst1]
