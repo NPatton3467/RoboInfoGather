@@ -82,7 +82,11 @@ class POMDP():
                             # Check features (this is only enum features)
                             feature_dict = {}
                             for feature in local_bel.feature_bels:
-                                feature_dict[feature] = local_bel.feature_bels[feature]['vals'][x,y,z]                                
+                                feature_val = local_bel.feature_bels[feature]['vals'][x,y,z]
+                                if type(feature_val) is torch.Tensor:
+                                    feature_val = float(feature_val.detach().cpu())
+
+                                feature_dict[feature] = feature_val
                             
                             map_resolution = local_bel.map_params['res']
                             map_size = local_bel.map_params['size']

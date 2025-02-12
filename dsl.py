@@ -269,7 +269,8 @@ class Query:
     def execute(self, symbolic_info):
         if self.result == None:
             self.result = self.where_clause.filter(copy.deepcopy(symbolic_info))
-
+            
+            print(self.result)
             if self.obj_tp in self.result and len(self.result[self.obj_tp]) > self.limit and self.limit > 0:
                 self.result[self.obj_tp] = self.result[self.obj_tp][0:self.limit]
 
@@ -442,7 +443,10 @@ class WhereClause:
                             # Extract response
                             response = response.choices[0].message.content
                             if response == "True" or response == "true":
-                                temp_dict1[inst1] = symbolic_info[self.obj_tp][inst1]
+                                # Append "spatial_rel" to the temp_dist 1
+                                temp_inst_dict1 = symbolic_info[self.obj_tp][inst1]
+                                temp_inst_dict1[self.spatial_relation] = str(self.obj_tp2) + "_" + str(inst2)
+                                temp_dict1[inst1] = temp_inst_dict1
                                 temp_dict2[inst2] = symbolic_info[self.obj_tp2][inst2]
 
             ret_symb_info[self.obj_tp] = temp_dict1

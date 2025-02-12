@@ -500,7 +500,8 @@ def main(cfg):
         print("Prog Result:\n", query_exec_res)
 
         # Get LLM to generate Natural Lanugage answer
-        nl_ans = get_nl_answer(query_exec_res, question)
+        query_str = prog.pretty_str()
+        nl_ans = get_nl_answer(query_exec_res, question, query_str)
         print("Natural Language Answer:\n", nl_ans)
 
         # Increment LLM similarity score
