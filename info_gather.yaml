@@ -95,6 +95,7 @@ rf_params:
     dist_delta: 0.1
 
 bel_params:
+  torch_device: 'cuda:3'
   akld_hist_len: 50
   akld_append_interval: 5
   akld_stop: 5.0

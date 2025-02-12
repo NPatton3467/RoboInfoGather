@@ -46,7 +46,7 @@ class RewardFunc():
                 checked_xy.append((bxy[0], bxy[1]))
 
             for z in range(belief.z_dim):
-                p = belief.p[bxy[0], bxy[1], z]
+                p = belief.p[bxy[0], bxy[1], z].detach().cpu()
                 if p > 0.0 and p < 1.0:
                     num_checked += 1
                     reward += p * np.log(p) + (1-p)*np.log(1-p)

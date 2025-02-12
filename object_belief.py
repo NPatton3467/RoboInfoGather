@@ -1,5 +1,6 @@
-import numpy as np
 import json
+import torch
+import numpy as np
 
 from RoboInfoGather.map_utils import *
 
@@ -9,35 +10,27 @@ class ObjTpBel():
         self.threshold = 0.75 # threshold # Existence threshold
         self.map_params = map_params
 
-        # TODO: Will want to update trav map as we go
-        size_to_use = max(2, map_params['size'])
-        self.trav_map = np.zeros((size_to_use, size_to_use))
 
         self.configs = configs
         self.relevant_features = relevant_features
         
-        #self.p = np.copy(self.trav_map)
-
-        self.p = np.ones_like(self.trav_map)
+        size_to_use = max(2, map_params['size'])
+        print("About to make first tensor")
+        self.p = torch.ones((size_to_use, size_to_use))
         self.p = self.p * 0.5
-        self.p = np.where(self.trav_map == 0, -1, self.p)
 
-        # Start with uniform prior, where traversable
-        #self.p = np.where((self.p == 255), 0.5, 0)
+        print("Made Unstacked")
 
         # Need to replicate vertically
         self.z_dim = max(2, int(self.configs['rf_params']['map_height'] / self.map_params['z_res']))
         temp_p = [self.p for i in range(self.z_dim)]
 
+        print("Made Stack List")
+        self.device = self.configs['bel_params']['torch_device']
         if self.z_dim > 1:
-            self.p = np.stack(temp_p, axis=2)
-
-
-        # For copying later if we get new features to evaluate
-        self.backup_p = np.copy(self.p)
-
-        # For object detection matching
-        self.clusters = []
+            self.p = torch.stack(temp_p, dim=2).to(device=torch.device(self.device))
+        
+        print("Made first tensor: ", self.p.shape)
 
         # Belief over features
         self.feature_bels = {}
@@ -45,7 +38,7 @@ class ObjTpBel():
             for feature in self.relevant_features:
                 if feature['name'] != None:
                     if feature['tp'] == "feature_scalar":
-                        feature_dict = {'bel': np.copy(self.p), "tp" : feature['tp'], "vals": np.zeros_like(self.p)}
+                        feature_dict = {'bel': torch.clone(self.p).to(torch.device(self.device)), "tp" : feature['tp'], "vals": torch.zeros_like(self.p).to(torch.device(self.device))}
                         self.feature_bels[feature['name']] = feature_dict
                     elif feature['tp'] == "feature_enum":
                         # For features, we want to keep around names like colour = red
@@ -58,7 +51,7 @@ class ObjTpBel():
                         assert val.shape == self.p.shape
 
 
-                        feature_dict = {'bel': np.copy(self.p), "tp" : feature['tp'], "vals": val}
+                        feature_dict = {'bel': torch.clone(self.p).to(torch.device(self.device)), "tp" : feature['tp'], "vals": val}
                         self.feature_bels[feature['name']] = feature_dict
                     else:
                         assert False # Shouldn't get here
@@ -80,19 +73,18 @@ class ObjTpBel():
         if feature is None:
             pre_shape = self.p.shape
             # Update Belief using Binary Bayes Filter
-            log_p = np.where(self.p > 0, np.log((self.p+eps)/(1-self.p+eps)), 0)
+            log_p = torch.where(self.p > 0, torch.log((self.p+eps)/(1-self.p+eps)), 0)
 
-            print("p min/max", np.min(self.p), "/", np.max(self.p))
-            print("obs min/max", np.min(obs), "/", np.max(obs))
+            print("p min/max", torch.min(self.p), "/", torch.max(self.p))
+            print("obs min/max", torch.min(obs), "/", torch.max(obs))
 
-            inv_sensor_model = np.where(obs != -1, np.log((obs+eps)/(1-obs+eps)), 0)
+            inv_sensor_model = torch.where(obs != -1, torch.log((obs+eps)/(1-obs+eps)), 0)
 
-            #new_log_p = np.where(inv_sensor_model != 0, log_p + inv_sensor_model, log_p)
             new_log_p = log_p + inv_sensor_model
 
-            self.p = 1 - (1/(1+np.exp(new_log_p)))
+            self.p = 1 - (1/(1+torch.exp(new_log_p)))
 
-            if np.isnan(self.p).any():
+            if torch.isnan(self.p).any():
                 print("Belief:")
                 print(self.p)
                 print("Observation:")
@@ -110,20 +102,19 @@ class ObjTpBel():
         else:
             # Update Belief using Binary Bayes Filter
             p = self.feature_bels[feature]['bel']
-            log_p = np.where(p > 0, np.log((p+eps)/(1-p+eps)), 0)
+            log_p = torch.where(p > 0, torch.log((p+eps)/(1-p+eps)), 0)
 
-            print("p min/max", np.min(p), "/", np.max(p))
-            print("obs min/max", np.min(obs), "/", np.max(obs))
+            print("p min/max", torch.min(p), "/", torch.max(p))
+            print("obs min/max", torch.min(obs), "/", torch.max(obs))
 
-            inv_sensor_model = np.where(obs != -1, np.log((obs+eps)/(1-obs+eps)), 0)
+            inv_sensor_model = torch.where(obs != -1, torch.log((obs+eps)/(1-obs+eps)), 0)
 
-            #new_log_p = np.where(inv_sensor_model != 0, log_p + inv_sensor_model, log_p)
             new_log_p = log_p + inv_sensor_model
 
-            new_p = 1 - (1/(1+np.exp(new_log_p)))
+            new_p = 1 - (1/(1+torch.exp(new_log_p)))
             self.feature_bels[feature]['bel'] = new_p
 
-            if np.isnan(new_p).any():
+            if torch.isnan(new_p).any():
                 print("Belief:")
                 print(new_p)
                 print("Observation:")
@@ -144,7 +135,10 @@ class ObjTpBel():
                     print("Vox: ", vox)
                     print("Vals Shape: ", val_shape)
 
-                self.feature_bels[feature]['vals'][vox[0], vox[1], vox[2]] = val
+                try:
+                    self.feature_bels[feature]['vals'][vox[0], vox[1], vox[2]] = val
+                except Exception as e:
+                    print(f"Failed to make val update into belief: {str(e)}")
             
                 # Make sure shape is remaining constant
                 assert self.feature_bels[feature]['vals'].shape == self.p.shape
@@ -154,4 +148,4 @@ class ObjTpBel():
 
     
     def get_visualization(self):
-        return np.mean(self.p, axis=2)
+        return torch.mean(self.p, axis=2)

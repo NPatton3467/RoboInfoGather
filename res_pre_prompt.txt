@@ -1,4 +1,4 @@
-Given a candidate object, return a grid resolution based on the average size of that object, such that the object only one object exists in a single grid space.
+Given a candidate object, return a grid resolution based on the average size of that object, such that the object only one object exists in a single grid space. For objects that are asymmetrical, return the larger of the two dimensions for width.
 
 Example 1:
 ```
@@ -32,6 +32,17 @@ Output:
 dimensions:
   height = 0.006 meters
   width = 0.19 meters
+```
+
+Example 4:
+```
+object = Fork
+```
+Output
+```
+dimensions:
+    height = 0.03
+    width = 0.18
 ```
 
 

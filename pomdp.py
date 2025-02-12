@@ -7,6 +7,7 @@ from matplotlib import pyplot as plt
 import copy
 import math
 import torch
+import numpy as np
 
 class POMDP():
     def __init__(self, query, robot_init_loc, obj_tp_list, trav_map_og_size, trav_map_og_res, configs):
@@ -129,12 +130,12 @@ class POMDP():
         for key in self.bel.keys():
             p = self.bel[key].p
 
-            cur_p_ent = np.where((p > 0) & (p < 1), p * np.log(p) + (1-p)*np.log(1-p), 0)
-            print(np.min(cur_p_ent))
-            num_valid = np.sum(np.where((p > 0) & (p < 1), 1, 0))
-            cur_p_avg_ent = np.sum(cur_p_ent) / num_valid
+            cur_p_ent = torch.where((p > 0) & (p < 1), p * torch.log(p) + (1-p)*torch.log(1-p), 0)
+            print(torch.min(cur_p_ent))
+            num_valid = torch.sum(torch.where((p > 0) & (p < 1), 1, 0))
+            cur_p_avg_ent = torch.sum(cur_p_ent) / num_valid
 
-            avg_entropy += (cur_p_avg_ent / len(self.bel.keys()))
+            avg_entropy += (cur_p_avg_ent.detach().cpu() / len(self.bel.keys()))
 
         return -1 * avg_entropy
 
@@ -174,8 +175,8 @@ class POMDP():
     def kl(self, p, q):
         # KL is sum over all possibilities of rv X
         # Here obj either exists or doesn't so p(x = 1) = 1 - p(x=0)
-        kl1 = np.sum(np.where((p > 0) & (q > 0), p*np.log(p/q), 0))
-        kl0 = np.sum(np.where(((1-p) > 0) & ((1-q) > 0), (1-p)*np.log((1-p)/(1-q)), 0))
+        kl1 = torch.sum(torch.where((p > 0) & (q > 0), p*torch.log(p/q), 0))
+        kl0 = torch.sum(torch.where(((1-p) > 0) & ((1-q) > 0), (1-p)*torch.log((1-p)/(1-q)), 0))
 
         kl = kl0+kl1
 

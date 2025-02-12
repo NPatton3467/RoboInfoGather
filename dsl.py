@@ -296,9 +296,12 @@ class WhereClause:
         if not is_temp:
             if self.where_tp == "and" or self.where_tp == "or":
                 assert len(self.sub_where_clause) == 2
+                assert type(self.sub_where_clause[0]) is WhereClause
+                assert type(self.sub_where_clause[1]) is WhereClause
 
             if self.where_tp == "not":
                 assert len(self.sub_where_clause) == 1
+                assert type(self.sub_where_clause[0]) is WhereClause
 
             if self.where_tp == "feature_enum":
                 assert self.enum_feature is not None and self.enum_param is not None
@@ -416,6 +419,7 @@ class WhereClause:
             temp_dict1 = {}
             temp_dict2 = {}
             if self.obj_tp in symbolic_info:
+                print("Symbolic Info:\n", symbolic_info)
                 for inst1 in symbolic_info[self.obj_tp]:
                     if self.obj_tp2 in symbolic_info:
                         for inst2 in symbolic_info[self.obj_tp2]:
@@ -463,10 +467,10 @@ class WhereClause:
                             inleft = False
                             inright = False
 
-                            if inst in left_symb_info[obj_tp]:
+                            if obj_tp in left_symb_info and inst in left_symb_info[obj_tp]:
                                 inleft = True
 
-                            if inst in right_symb_info[obj_tp]:
+                            if obj_tp in right_symb_info and inst in right_symb_info[obj_tp]:
                                 inright = True
 
                             if inleft or inright:

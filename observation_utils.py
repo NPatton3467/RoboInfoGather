@@ -96,11 +96,13 @@ def get_fov_from_depth_image(camera_pos, robot_yaw, raw_depth_image, voxel_preds
                 cur_depth += (resolution / 2)
 
 
+    print("Done first Depth Loop")
+    
     # Make sure obstacles are still set to -1
     for p_x in range(depth_image.shape[1]):
         for p_y in range(depth_image.shape[0]):
             cur_depth = depth_image[p_y, p_x]
-            max_depth = size * resolution
+            max_depth = cur_depth + 2
             while cur_depth < max_depth:
                 world_coords = get_world_coords_from_depth(p_x, p_y, cur_depth, camera_pos, robot_yaw, cam_int_mat)
 
@@ -116,6 +118,7 @@ def get_fov_from_depth_image(camera_pos, robot_yaw, raw_depth_image, voxel_preds
                 cur_depth += (resolution / 2)
                
 
+    print("Done second Depth Loop")
     return voxel_preds
                 
 
@@ -229,7 +232,7 @@ def obj_detection(vlm, cam_int_mat, dino_model, obj_tp, rgb_img, depth_img, conf
             img = Image.fromarray(cropped_img).convert('RGB')
     
             # Query VLM
-            prompt = f"Given the image and object type `{obj_tp}`, what is the value of the feature `{feature}`? Please respond with only a single word, answering the above question."
+            prompt = f"Given the image and object type `{obj_tp}`, what is the value of the feature `{feature}`? Please respond with only the answer to the above question."
 
             response = vlm.generate(prompt, img)
 
@@ -251,7 +254,7 @@ def get_vox_preds(vlm, robot_yaw, camera_pos, camera_pose, belief, obj_tp, rgb_i
 
     print("Robot Yaw: ", robot_yaw)
 
-    voxel_preds = np.ones(belief.p.shape)
+    voxel_preds = torch.ones(belief.p.shape).to(torch.device(config['bel_params']['torch_device']))
     voxel_preds *= -1
     
     # Make 0 in all visible voxels
