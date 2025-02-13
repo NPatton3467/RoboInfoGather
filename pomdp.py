@@ -10,7 +10,7 @@ import torch
 import numpy as np
 
 class POMDP():
-    def __init__(self, query, robot_init_loc, obj_tp_list, trav_map_og_size, trav_map_og_res, configs):
+    def __init__(self, query, robot_init_loc, obj_tp_list, trav_map_og_dim, trav_map_og_res, vol_origin, configs):
         # Stopping criteria type
         self.explore_stop = configs['bel_params']['explore_stop']
 
@@ -21,8 +21,9 @@ class POMDP():
         self.configs = configs
 
         # Calculate originial map params so that we can pass to reward and belief classes
-        self.trav_map_original_size = trav_map_og_size
+        self.trav_map_original_dim = trav_map_og_dim
         self.trav_map_original_resolution = trav_map_og_res
+        self.vol_origin = vol_origin
 
         self.bel = {}
         self.reward_funcs = {}
@@ -30,7 +31,7 @@ class POMDP():
         self.rf_params = configs["rf_params"]
         for obj_tp, num, thresh, relevant_features, priors in obj_tp_list:
             # Get map params based off of current params and obj_tp
-            map_params = get_map_params(obj_tp, self.trav_map_original_size, self.trav_map_original_resolution)
+            map_params = get_map_params(obj_tp, self.trav_map_original_dim, self.trav_map_original_resolution, self.vol_origin)
 
             if priors == None:
                 self.bel[obj_tp] = ObjTpBel(num, thresh, map_params, self.configs, relevant_features)
@@ -89,10 +90,11 @@ class POMDP():
                                 feature_dict[feature] = feature_val
                             
                             map_resolution = local_bel.map_params['res']
-                            map_size = local_bel.map_params['size']
-                            w_xy = map_to_world(np.array([x,y]), map_resolution, map_size)
-                            w_z = z * local_bel.map_params['z_res']
-                            feature_dict['location'] = (w_xy[0],w_xy[1],w_z)
+                            z_resolution = local_bel.map_params['z_res']
+                            vol_origin = local_bel.map_params['vol_origin']
+                            
+                            w_xyz = map_to_world(np.array([x,y,z]), vol_origin, map_resolution, z_resolution)
+                            feature_dict['location'] = (w_xyz[0],w_xyz[1],w_xyz[2])
 
                             cur_obj_dict[instance_count] = feature_dict
 

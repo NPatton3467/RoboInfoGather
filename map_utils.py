@@ -8,7 +8,7 @@ f = open('/robodata/user_data/npatt/explore-eqa/RoboInfoGather/openaikey.txt', '
 openai_api_key = f.read().rstrip('\n')
 f.close()
 
-def get_map_params(obj_tp, map_original_size, map_original_resolution):
+def get_map_params(obj_tp, map_original_dim, map_original_resolution, vol_origin):
     """
     Calculates parameters needed for mapping form world to Belief coordinates using LLM and previous params
 
@@ -51,15 +51,31 @@ def get_map_params(obj_tp, map_original_size, map_original_resolution):
     vresponse = vresponse[:meters_idx].rstrip(' ')
     z_resolution = float(vresponse)
 
-    map_size = map_size = int(
-        map_original_size * map_original_resolution / map_resolution
+    map_dim = (
+        map_original_dim * map_original_resolution / map_resolution
+    ).astype(int)
+
+    # Different res for z dimension
+    map_dim[2] = int(
+        map_original_dim[2] * map_original_resolution / z_resolution
     )
 
-    return {'res' : map_resolution, 'og_res' : map_original_resolution, 'size' : map_size, 'og_size' : map_original_size, 'z_res' : z_resolution}
+    return {'res' : map_resolution, 'og_res' : map_original_resolution, 'dim' : map_dim, 'og_dim' : map_original_dim, 'z_res' : z_resolution, 'vol_origin': vol_origin}
 
-def world_to_map(xy, map_resolution, map_size):
-    return np.flip((np.array(xy) / map_resolution + map_size / 2.0)).astype(np.int)
+def world_to_map(xyz, vol_origin, map_resolution, z_resolution, map_dim):
+    pts = xyz - vol_origin
+    coords = np.round(pts / map_resolution).astype(int)
+    coords[2] = np.round(pts[2] / z_resolution).astype(int)
+    coords = np.clip(coords, 0, map_dim - 1)
+    return coords
 
-def map_to_world(xy, map_resolution, map_size):
-    axis = 0 if len(xy.shape) == 1 else 1
-    return np.flip((xy - map_size / 2.0) * map_resolution, axis=axis)
+def map_to_world(xyz, vol_origin, map_resolution, z_resolution):
+    vol_origin = vol_origin.astype(np.float32)
+    vox_coords = xyz.astype(np.float32)
+    cam_pts = np.empty_like(vox_coords, dtype=np.float32)
+    for i in range(3):
+        if i < 2:
+            cam_pts[i] = vol_origin[i] + (map_resolution * vox_coords[i])
+        else:
+            cam_pts[i] = vol_origin[i] + (z_resolution * vox_coords[i])
+    return cam_pts

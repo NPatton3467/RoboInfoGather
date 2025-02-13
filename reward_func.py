@@ -29,12 +29,16 @@ class RewardFunc():
         locs, _ = get_fov(node.loc, local_config, self.camera_params, obstacle_map, belief, debug_print=False)
 
         reward = 0.0
-        x_max = belief.map_params['size']
-        y_max = belief.map_params['size']
+        x_max = belief.map_params['dim'][0]
+        y_max = belief.map_params['dim'][1]
         checked_xy = []
         num_checked = 0
         for (x,y) in locs:
-            bxy = world_to_map(np.array([x, y]), belief.map_params['res'], belief.map_params['size'])
+            vol_origin = belief.map_params['vol_origin']
+            b_res = belief.map_params['res']
+            bz_res = belief.map_params['z_res']
+            map_dim = belief.map_params['dim']
+            bxy = world_to_map(np.array([x, y, 0]), vol_origin, b_res, bz_res, map_dim)
 
             # Skip if bordeline out of range
             if bxy[0] not in range(0, x_max) or bxy[1] not in range(0, y_max):
@@ -45,7 +49,7 @@ class RewardFunc():
             else:
                 checked_xy.append((bxy[0], bxy[1]))
 
-            for z in range(belief.z_dim):
+            for z in range(map_dim[2]):
                 p = belief.p[bxy[0], bxy[1], z].detach().cpu()
                 if p > 0.0 and p < 1.0:
                     num_checked += 1

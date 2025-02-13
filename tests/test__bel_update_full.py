@@ -16,6 +16,7 @@ import numpy as np
 np.set_printoptions(precision=3)
 import csv
 import pickle
+import logging
 import math
 import quaternion
 import matplotlib.pyplot as plt
@@ -73,17 +74,18 @@ def main(cfg):
                 ],
                 "init_angle": float(row["init_angle"]),
             }
+    logging.info(f"Loaded {len(questions_data)} questions.")
 
     # Load VLM 
     vlm = VLM(cfg.vlm)
     
     # Run all questions
     cnt_data = 0
+    results_all = []
     cum_sim_score = 0
-    for question_ind in tqdm(range(len(questions_data))):
-    #for question_ind in range(1):
+    for question_ind in range(1):
         plt.close('all')
-        
+
         # Extract question
         question_data = questions_data[question_ind]
         scene = question_data["scene"]
@@ -105,6 +107,12 @@ def main(cfg):
         print("Text Answer: ", text_answer)
         init_pts = init_pose_data[scene_floor]["init_pts"]
         init_angle = init_pose_data[scene_floor]["init_angle"]
+        logging.info(f"\n========\nIndex: {question_ind} Scene: {scene} Floor: {floor}")
+
+        # Set data dir for this question - set initial data to be saved
+        episode_data_dir = os.path.join(cfg.output_dir, str(question_ind))
+        os.makedirs(episode_data_dir, exist_ok=True)
+        result = {"question_ind": question_ind}
 
         # Set up scene in Habitat
         try:
@@ -144,6 +152,9 @@ def main(cfg):
         floor_height = pts_normal[-1]
         tsdf_bnds, scene_size = get_scene_bnds(pathfinder, floor_height)
         num_step = int(math.sqrt(scene_size) * cfg.max_step_room_size_ratio)
+        logging.info(
+            f"Scene size: {scene_size} Floor height: {floor_height} Steps: {num_step}"
+        )
         
         # Initialize TSDF
         tsdf_planner = TSDFPlanner(
@@ -175,6 +186,7 @@ def main(cfg):
         print(tsdf_bnds)
         print("VOL DIM: ", tsdf_planner._vol_dim)
         print("VOX SIZE: ", tsdf_planner._voxel_size)
+        print("VOL ORIGIN: ", tsdf_planner._vol_origin)
         
         #This format: np.array([-way_point.loc.y, pts[1], way_point.loc.x])
         pos = pos_habitat_to_normal(pts)
@@ -188,8 +200,9 @@ def main(cfg):
                             query=prog.expressions[0],
                             pos=pos,
                             yaw=angle,
-                            trav_map_og_size=size,
+                            trav_map_og_dim=tsdf_planner._vol_dim,
                             trav_map_og_res=resolution,
+                            vol_origin=tsdf_planner._vol_origin,
                             configs=RIG_config
                         )
                 else:
@@ -197,8 +210,9 @@ def main(cfg):
                             query=prog,
                             pos=pos,
                             yaw=angle,
-                            trav_map_og_size=size,
+                            trav_map_og_dim=tsdf_planner._vol_dim,
                             trav_map_og_res=resolution,
+                            vol_origin=tsdf_planner._vol_origin,
                             configs=RIG_config
                         )
                 break
@@ -218,14 +232,17 @@ def main(cfg):
         cnt_step = 0
         num_black_in_a_row = 0
         responses = []
-        while cnt_step < 1:
+        while cnt_step < num_step:
+            logging.info(f"\n== step: {cnt_step}")
 
             # Save step info and set current pose
             step_name = f"step_{cnt_step}"
+            logging.info(f"Current pts: {pts}")
             agent_state.position = pts
             agent_state.rotation = rotation
             agent.set_state(agent_state)
             pts_normal = pos_habitat_to_normal(pts)
+            result[step_name] = {"pts": pts, "angle": angle}
 
 
             # Update camera info
@@ -276,7 +293,7 @@ def main(cfg):
                         vlm,
                         angle,
                         camera_pos,
-                        cam_pose,
+                        cam_pose_normal,
                         pomdp.bel[obj_tp],
                         obj_tp,
                         rgb,
@@ -289,8 +306,22 @@ def main(cfg):
                     )
                 
                 pomdp.bel[obj_tp].update(vox_preds)
-                print("Camera Pose: ", cam_pose)
-                print("PTS: ", pts)
+                print("PTS: ", pts_normal)
+                print("CAM_POS: ", camera_pos)
+                tres = pomdp.bel[obj_tp].map_params['res']
+                tz_res = pomdp.bel[obj_tp].map_params['z_res']
+                tvol_origin = pomdp.bel[obj_tp].map_params['vol_origin']
+                tdim = pomdp.bel[obj_tp].map_params['dim']
+                bxyz = world_to_map(pts_normal, tvol_origin, tres, tz_res, tdim)
+                print("Bel Points: ", bxyz)
+                print("ANGLE: ", angle)
+                print("RAD2DEG Angle: ", np.rad2deg(angle))
+                print("Max/min Depth Image values: ", np.max(depth), "/", np.min(depth))
+
+                plt.close('all')
+                plot_bel = np.array(pomdp.bel[obj_tp].p.detach().cpu())
+                plt.imshow(np.mean(plot_bel, axis=2))
+                plt.show()
 
                 # Do the same for each feature
                 print("Starting Feature Update in run_RIG")
@@ -301,7 +332,7 @@ def main(cfg):
                             vlm,
                             angle,
                             camera_pos,
-                            cam_pose,
+                            cam_pose_normal,
                             pomdp.bel[obj_tp],
                             obj_tp,
                             rgb,
@@ -315,6 +346,22 @@ def main(cfg):
                         )
 
                     pomdp.bel[obj_tp].update(vox_preds, feature=feature, feature_ret_vals=feature_ret_vals)
+                    print("PTS: ", pts_normal)
+                    print("CAM_POS: ", camera_pos)
+                    tres = pomdp.bel[obj_tp].map_params['res']
+                    tz_res = pomdp.bel[obj_tp].map_params['z_res']
+                    tvol_origin = pomdp.bel[obj_tp].map_params['vol_origin']
+                    tdim = pomdp.bel[obj_tp].map_params['dim']
+                    bxyz = world_to_map(pts_normal, tvol_origin, tres, tz_res, tdim)
+                    print("Bel Points: ", bxyz)
+                    print("ANGLE: ", angle)
+                    print("RAD2DEG Angle: ", np.rad2deg(angle))
+                    print("Max/min Depth Image values: ", np.max(depth), "/", np.min(depth))
+
+                    plt.close('all')
+                    plot_bel = np.array(pomdp.bel[obj_tp].feature_bels[feature]['bel'].detach().cpu())
+                    plt.imshow(np.mean(plot_bel, axis=2))
+                    plt.show()
 
             print("Done Feature Update in run_RIG")
 
@@ -348,6 +395,11 @@ def main(cfg):
                         )
                     )
                     fig.tight_layout()
+                    plt.savefig(
+                        os.path.join(
+                            episode_data_dir, "{}_prompt_points.png".format(cnt_step)
+                        )
+                    )
                     plt.close()
 
                 # Visual prompting
@@ -378,37 +430,49 @@ def main(cfg):
                         anchor="mm",
                         font_size=12,
                     )
+                rgb_im_draw.save(
+                    os.path.join(episode_data_dir, f"{cnt_step}_draw.png")
+                )
 
                 prompt_lsv = f"\nConsider the question: '{question}', and you will explore the environment for answering it.\nWhich direction (black letters on the image) would you explore then? Please answer with a single letter."
                 # logging.info(f"Prompt Exp: {prompt_text}")
 
                 print("Done VLM prompt set up")
 
+                num_black_pixels = np.sum(
+                        np.sum(rgb[:,:,0:3], axis=-1) == 0
+                )  # sum over channel first
+
+                if num_black_pixels < cfg.black_pixel_ratio * img_width * img_height:
+                    #if cnt_step > 1:
+                    #    print("Num Black: ", num_black_pixels)
+                    #    print("Shape: ", rgb.shape)
+                    #    print("Max: ", np.max(rgb))
+                    #    print("Mean: ", np.mean(rgb))
+
+                    #    nbp = np.sum(np.sum(rgb[:,:,0:3], axis=-1) == 0)
+
+                    #    print("Num Black w/o Alpha Channel: ", nbp)
+
+                    cnt_step += 1
+                    num_black_in_a_row = 0
+                    
+                    if cfg.save_obs:
+                        plt.imsave(
+                            os.path.join(episode_data_dir, "{}.png".format(cnt_step)), rgb
+                        )
+                elif num_black_in_a_row > 50:
+                    cnt_step += 1
+                    num_black_in_a_row += 1
+                    if cfg.save_obs:
+                        plt.imsave(
+                            os.path.join(episode_data_dir, "{}.png".format(cnt_step)), rgb
+                        )
+                else:
+                    num_black_in_a_row += 1
+                
                 actual_num_prompt_points = len(prompt_points_pix)
-                if actual_num_prompt_points >= cfg.visual_prompt.min_num_prompt_points:
-                    num_black_pixels = np.sum(
-                            np.sum(rgb[:,:,0:3], axis=-1) == 0
-                    )  # sum over channel first
-
-                    if num_black_pixels < cfg.black_pixel_ratio * img_width * img_height:
-                        #if cnt_step > 1:
-                        #    print("Num Black: ", num_black_pixels)
-                        #    print("Shape: ", rgb.shape)
-                        #    print("Max: ", np.max(rgb))
-                        #    print("Mean: ", np.mean(rgb))
-
-                        #    nbp = np.sum(np.sum(rgb[:,:,0:3], axis=-1) == 0)
-
-                        #    print("Num Black w/o Alpha Channel: ", nbp)
-
-                        cnt_step += 1
-                        num_black_in_a_row = 0
-                        
-                    elif num_black_in_a_row > 50:
-                        cnt_step += 1
-                        num_black_in_a_row += 1
-                    else:
-                        num_black_in_a_row += 1
+                if actual_num_prompt_points >= 1:
 
                     # logging.info(f"Prompt Exp: {prompt_text}")
                     lsv = vlm.get_loss(
@@ -427,7 +491,7 @@ def main(cfg):
                         px = prompt_points_pix[prompt_point_ind][0]
                         cur_depth = depth[py,px]
                         print("Getting Reward")
-                        world_coords = get_world_coords_from_depth(px, py, cur_depth, camera_pos, angle, cam_intr)
+                        world_coords = get_world_coords_from_depth(px, py, cur_depth, camera_pos, cam_pose_normal, cam_intr)
                         node = MCTS_Tree_Node(
                                 loc=Loc(world_coords[0], world_coords[1], angle),
                                 obstacle_map = tsdf_planner,
@@ -448,7 +512,7 @@ def main(cfg):
                         for key in pomdp.bel.keys():
                             belief = pomdp.bel[key]
                             reward += pomdp.reward_funcs[key].eval(belief, tsdf_planner, root, node)
-                        lsv[prompt_point_ind] += 2*reward
+                        #lsv[prompt_point_ind] += 2*reward
 
                     # Integrate semantics only if there is any prompted point
                     tsdf_planner.integrate_sem(
@@ -499,33 +563,65 @@ def main(cfg):
         # Execute Symbolic Info
         query_exec_res = prog.execute(symbolic_info)
         print("Prog Result:\n", query_exec_res)
+        result['query_execution_result'] = query_exec_res
+        result['full_symb_info'] = symbolic_info
+        result['question'] = question
+        result['pomdp'] = pomdp
 
         # Get LLM to generate Natural Lanugage answer
         query_str = prog.pretty_str()
         nl_ans = get_nl_answer(query_exec_res, question, query_str)
         print("Natural Language Answer:\n", nl_ans)
+        result['output_answer'] = nl_ans
+        result['True_Answer'] = text_answer
 
         # Increment LLM similarity score
         print("Actual Answer: ", text_answer)
         raw_sim_score = eval_similarity(nl_ans, text_answer)
+        result['Raw_Similarity_Score'] = raw_sim_score
         # Extract Int Score
         try:
             sim_score = int(raw_sim_score)
         except Exception as e:
             print(f"Failed to make int from model output: {str(e)}")
             sim_score = 1
+        result['Similarity_Score'] = sim_score
 
         cum_sim_score += (sim_score - 1)/4
+        cur_llm_match_percent = (cum_sim_score/(question_ind+1)) * 100
+        results['current_cum_sim_score'] = cum_sim_score
+        results['current_llm_match_percent'] = cur_llm_match_percent
+        
         print("Current Cumulative Sim Score: ", cum_sim_score)
-        print("Current Number of Questions: ", question_ind+1)
-        print("Current LLM-Match %: ", cum_sim_score/(question_ind+1)*100)
+        print("Current LLM-Match %: ", cur_llm_match_percent)
+
+        # Episode summary
+        logging.info(f"\n== Episode Summary")
+        logging.info(f"Scene: {scene}, Floor: {floor}")
+        logging.info(f"Question:\n{question}\nAnswer: {answer}")
+
+        # Save data
+        results_all.append(result)
+        cnt_data += 1
+        #if cnt_data % cfg.save_freq == 0:
+        with open(
+            os.path.join(cfg.output_dir, f"results_{cnt_data}.pkl"), "wb"
+        ) as f:
+            pickle.dump(results_all, f)
 
 
+    # Save all data again
+    with open(os.path.join(cfg.output_dir, "results.pkl"), "wb") as f:
+        pickle.dump(results_all, f)
+    with open(os.path.join(cfg.output_dir, "responses.txt"), "w") as f:
+        f.write(str(responses))
 
-
+    logging.info(f"\n== All Summary")
+    logging.info(f"Number of data collected: {cnt_data}")
+    
     print("Cumulative Sim Score: ", cum_sim_score)
-    print("Number of Questions: ", len(questions_data))
-    print("LLM-Match %: ", cum_sim_score/len(questions_data)*100)
+    print("Current Number of Questions: ", question_ind+1)
+    print("LLM-Match %: ", cum_sim_score/(questin_ind+1)*100)
 
 
     with open(os.path.join(".", "pomdp.pkl"), "wb") as f:
@@ -543,10 +639,20 @@ if __name__ == "__main__":
     cfg = OmegaConf.load(args.cfg_file)
     OmegaConf.resolve(cfg)
 
-
-    print(cfg)
-    cfg.vlm.device = 'cuda:2'
-    print(cfg)
+    # Set up logging
+    cfg.output_dir = os.path.join(cfg.output_parent_dir, cfg.exp_name)
+    if not os.path.exists(cfg.output_dir):
+        os.makedirs(cfg.output_dir, exist_ok=True)  # recursive
+    logging_path = os.path.join(cfg.output_dir, "log.log")
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(message)s",
+        handlers=[
+            logging.FileHandler(logging_path, mode="w"),
+            logging.StreamHandler(),
+        ],
+    )
 
     # run
+    logging.info(f"***** Running {cfg.exp_name} *****")
     main(cfg)

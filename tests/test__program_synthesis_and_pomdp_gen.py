@@ -148,6 +148,8 @@ def main(cfg):
         pomdp = None
 
         resolution = cfg.tsdf_grid_size
+        dim = tsdf_planner._vol_dim
+        vol_origin = tsdf_planner._vol_origin
         size = int(max(abs(tsdf_bnds[0][0] - tsdf_bnds[0][1]), abs(tsdf_bnds[1][0] - tsdf_bnds[1][1])) / resolution)
 
         #This format: np.array([-way_point.loc.y, pts[1], way_point.loc.x])
@@ -157,28 +159,31 @@ def main(cfg):
             attempts += 1
             try:
                 prog = gen_prog_from_nl(question)
-                if type(prog) is Prog:
-                    pomdp = gen_pomdp_from_query(
-                            query=prog.expressions[0],
-                            pos=pos,
-                            yaw=angle,
-                            trav_map_og_size=size,
-                            trav_map_og_res=resolution,
-                            configs=RIG_config
-                        )
-                else:
-                    pomdp = gen_pomdp_from_query(
-                            query=prog,
-                            pos=pos,
-                            yaw=angle,
-                            trav_map_og_size=size,
-                            trav_map_og_res=resolution,
-                            configs=RIG_config
-                        )
                 break
 
             except Exception as e:
                 print(f"Could not generate program, attempt {attempts}")
+        
+        if type(prog) is Prog:
+            pomdp = gen_pomdp_from_query(
+                    query=prog.expressions[0],
+                    pos=pos,
+                    yaw=angle,
+                    trav_map_og_dim=dim,
+                    trav_map_og_res=resolution,
+                    vol_origin=vol_origin,
+                    configs=RIG_config
+                )
+        else:
+            pomdp = gen_pomdp_from_query(
+                    query=prog,
+                    pos=pos,
+                    yaw=angle,
+                    trav_map_og_dim=dim,
+                    trav_map_og_res=resolution,
+                    vol_origin=vol_origin,
+                    configs=RIG_config
+                )
 
         print(f"\nQuestion:\n{question}\nProgram: ")
         print(prog.pretty_str())

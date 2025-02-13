@@ -88,7 +88,7 @@ def sample_locs(start, pomdp, obstacle_map, configs):
         x_obs_map_coords = np.random.randint(0, int(o_size/s_disc)) * s_disc
         y_obs_map_coords = np.random.randint(0, int(o_size/s_disc)) * s_disc
 
-        xy_world_coords = obstacle_map.vox2world(
+        xyz_world_coords = obstacle_map.vox2world(
                 obstacle_map._vol_origin,
                 np.array([[x_obs_map_coords, y_obs_map_coords, 0]]),
                 obstacle_map._voxel_size)[0]
@@ -97,8 +97,11 @@ def sample_locs(start, pomdp, obstacle_map, configs):
         legal = True
         for key in pomdp.bel.keys():
             b_res = pomdp.bel[key].map_params['res']
-            b_size = pomdp.bel[key].map_params['size']
-            xy_bel_coords = world_to_map(xy_world_coords, b_res, b_size)
+            bz_res = pomdp.bel[key].map_params['z_res']
+            b_dim = pomdp.bel[key].map_params['dim']
+            vol_origin = pomdp.bel[key].map_params['vol_origin']
+
+            xyz_bel_coords = world_to_map(xyz_world_coords, vol_origin, b_res, bz_res, b_dim)
 
             if xy_bel_coords[0] >= pomdp.bel[key].p.shape[0]:
                 legal = False

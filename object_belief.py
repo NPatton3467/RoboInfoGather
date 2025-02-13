@@ -14,22 +14,13 @@ class ObjTpBel():
         self.configs = configs
         self.relevant_features = relevant_features
         
-        size_to_use = max(2, map_params['size'])
         print("About to make first tensor")
-        self.p = torch.ones((size_to_use, size_to_use))
+        dim = self.map_params['dim']
+        dim_tup = (dim[0], dim[1], dim[2])
+        self.device = self.configs['bel_params']['torch_device']
+        self.p = torch.ones(dim_tup).to(device=torch.device(self.device))
         self.p = self.p * 0.5
 
-        print("Made Unstacked")
-
-        # Need to replicate vertically
-        self.z_dim = max(2, int(self.configs['rf_params']['map_height'] / self.map_params['z_res']))
-        temp_p = [self.p for i in range(self.z_dim)]
-
-        print("Made Stack List")
-        self.device = self.configs['bel_params']['torch_device']
-        if self.z_dim > 1:
-            self.p = torch.stack(temp_p, dim=2).to(device=torch.device(self.device))
-        
         print("Made first tensor: ", self.p.shape)
 
         # Belief over features

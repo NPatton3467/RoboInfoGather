@@ -483,25 +483,23 @@ class WhereClause:
                     ret_symb_info[obj_tp] = temp_dict
 
         elif self.where_tp == "not":
-            return f"!({self.sub_where_clause[0].pretty_str()})"
-
             true_ret_info = self.sub_where_clause[0].filter(symbolic_info)
 
             # Compare to ret symb info
             # Remove version that are in true_ret_info
-            keep_obj_list = []
+            keep_obj = {}
             if self.obj_tp in symbolic_info:
                 for obj_dict in symbolic_info[self.obj_tp]:
                     in_true = False
 
                     if self.obj_tp in true_ret_info:
                         for t_obj_dict in true_ret_info[self.obj_tp]:
-                            if obj_dict['id'] == t_obj_dict['id']:
+                            if obj_dict == t_obj_dict:
                                 in_true = True
 
                     if not in_true:
-                        keep_obj_list.append(obj_dict)
+                        keep_obj[obj_dict] = symbolic_info[self.obj_tp][obj_dict]
 
-            ret_symb_info[self.obj_tp] = keep_obj_list
+                ret_symb_info[self.obj_tp] = keep_obj
 
         return ret_symb_info

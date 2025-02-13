@@ -119,6 +119,53 @@ print("\nResult:\n", result)
 print("\n\n")
 
 
+# # Enum WhereClause single obj
+print("Where colour != red -- single object")
+new_sub_where = WhereClause(where_tp='feature_enum', obj_tp="cup", enum_feature='colour', enum_param='red')
+print(new_sub_where.pretty_str())
+
+new_where = WhereClause(where_tp='not', obj_tp='cup', sub_where_clause=[new_sub_where])
+print(new_where.pretty_str())
+
+new_query = Query(obj_tp="cup", where_clause=new_where)
+print(new_query.pretty_str())
+
+new_pomdp = gen_pomdp_from_query(
+        query=new_query,
+        pos=pos,
+        yaw=angle,
+        trav_map_og_size=size,
+        trav_map_og_res=resolution,
+        configs=config
+    )
+
+new_pomdp.bel['cup'].p[10,10,10] = 0.95
+new_pomdp.bel['cup'].feature_bels['colour']['bel'][10,10,10] = 0.95
+new_pomdp.bel['cup'].feature_bels['colour']['vals'][10,10,10] = 'red'
+
+new_pomdp.bel['cup'].p[15,10,10] = 0.95
+new_pomdp.bel['cup'].feature_bels['colour']['bel'][15,10,10] = 0.95
+new_pomdp.bel['cup'].feature_bels['colour']['vals'][15,10,10] = 'black'
+
+new_pomdp.bel['cup'].p[10,15,10] = 0.95
+new_pomdp.bel['cup'].feature_bels['colour']['bel'][10,15,10] = 0.95
+new_pomdp.bel['cup'].feature_bels['colour']['vals'][10,15,10] = 'green'
+
+new_pomdp.bel['cup'].p[10,10,15] = 0.95
+new_pomdp.bel['cup'].feature_bels['colour']['bel'][10,10,15] = 0.95
+new_pomdp.bel['cup'].feature_bels['colour']['vals'][10,10,15] = 'yellow'
+
+new_pomdp.bel['cup'].p[0,10,10] = 0.95
+new_pomdp.bel['cup'].feature_bels['colour']['bel'][0,10,10] = 0.95
+new_pomdp.bel['cup'].feature_bels['colour']['vals'][0,10,10] = 'red'
+
+symbolic_info = new_pomdp.make_symbolic()
+print("Symbolic Info: ", symbolic_info)
+result = new_query.execute(symbolic_info)
+print("\nResult:\n", result)
+print("\n\n")
+
+
 # # And where clause single obj
 print("Where colour = red and volume > 300 ml")
 sub_where_colour = WhereClause(where_tp='feature_enum', obj_tp='cup', enum_feature='colour', enum_param='red')

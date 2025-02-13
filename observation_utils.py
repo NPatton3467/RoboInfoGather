@@ -36,7 +36,7 @@ def get_new_node(current_loc, dist, angle, belief):
     # Get Map xy
     return real_x, real_y
 
-def get_world_coords_from_depth(x, y, depth, camera_pos, robot_yaw, camera_intrinsic_mat):
+def get_world_coords_from_depth(x, y, depth, camera_pos, camera_pose, camera_intrinsic_mat):
     cx = camera_intrinsic_mat[0][2]
     cy = camera_intrinsic_mat[1][2]
     fx = camera_intrinsic_mat[0][0]
@@ -46,28 +46,35 @@ def get_world_coords_from_depth(x, y, depth, camera_pos, robot_yaw, camera_intri
     camera_coords_x = (x-cx)*camera_coords_z/fx
     camera_coords_y = (y-cy)*camera_coords_z/fy
 
-    # Translate 3D coordinates to global frame
-    c_coord = np.array([camera_coords_x, camera_coords_y, camera_coords_z])
+    debug = False
+    if debug:
+        print("CX: ", cx)
+        print("CY: ", cy)
+        print("FX: ", fx)
+        print("FY: ", fy)
+        print("X: ", x)
+        print("Y: ", y)
 
-    # Set up translation vector based off of actual camera position 
-    translation = camera_pos
+    # Translate 3D coordinates to global frame
+    c_coord = np.array([camera_coords_x, camera_coords_y, camera_coords_z, 1])
 
     # Coordinate transform
-    c_coord = np.array([c_coord[2], -c_coord[0], -c_coord[1]])
+    c_coord2 = np.array([c_coord[2], -c_coord[0], -c_coord[1], 1])
 
     # Rotate to yaw 
-    Rotation = np.array([
-        [np.cos(robot_yaw), -np.sin(robot_yaw), 0],
-        [np.sin(robot_yaw), np.cos(robot_yaw), 0],
-        [0,0,1]])
-    world_coords = np.matmul(Rotation, c_coord)
+    if debug:
+        print("Camera Pose: ", camera_pose)
+        print("Camera Position: ", camera_pos)
+        print("Coordinates in Camera Frame: ", c_coord)
+        print("Coordinates in Camera Frame2: ", c_coord2)
 
-    # Translate
-    world_coords += translation
+        print("Apply Camera Pose to 1: ", np.matmul(camera_pose, c_coord))
+        print("Apply Camera Pose to 2: ", np.matmul(camera_pose, c_coord2))
 
-    return world_coords
+    world_coords = np.matmul(camera_pose, c_coord2)
+    return world_coords[0:3]
 
-def get_fov_from_depth_image(camera_pos, robot_yaw, raw_depth_image, voxel_preds, resolution, z_res, size, config, cam_int_mat):
+def get_fov_from_depth_image(camera_pos, camera_pose, raw_depth_image, voxel_preds, resolution, z_res, dim, vol_origin, config, cam_int_mat):
     # Max pool to decrease image size
     depth_image = skimage.measure.block_reduce(raw_depth_image, (16,16), np.min)
     print("Got Depth Image... Shape: ", depth_image.shape)
@@ -77,48 +84,32 @@ def get_fov_from_depth_image(camera_pos, robot_yaw, raw_depth_image, voxel_preds
         for p_y in range(depth_image.shape[0]):
             #print(p_x, p_y)
             max_depth = depth_image[p_y, p_x]
-            if max_depth >= size * resolution:
+            if max_depth >= np.max(dim) * resolution:
                 continue
+
+            # Resize p_x, and p_y to original location in image for real world coordinate mapping
+            x = int(p_x / depth_image.shape[1] * raw_depth_image.shape[1])
+            y = int(p_y / depth_image.shape[0] * raw_depth_image.shape[0])
 
             cur_depth = 0
             while cur_depth < max_depth:
-                world_coords = get_world_coords_from_depth(p_x, p_y, cur_depth, camera_pos, robot_yaw, cam_int_mat)
+                world_coords = get_world_coords_from_depth(x, y, cur_depth, camera_pos, camera_pose, cam_int_mat)
 
                 # Set voxel pred location to 0 here
-                v_xy = world_to_map(np.array([world_coords[0],world_coords[1]]), resolution, size)
+                v_xyz = world_to_map(world_coords, vol_origin, resolution, z_res, dim)
+                if False:
+                    print("Current Depth: ", cur_depth)
+                    print("World Coordinates: ", world_coords)
+                    print("Voxel Coordinates: ", v_xyz)
 
                 if not np.isnan(world_coords[2]):
-                    vz = int(world_coords[2] / z_res)
-
-                    if v_xy[0] in range(0, size) and v_xy[1] in range(0, size) and vz in range(0, voxel_preds.shape[2]):
-                        voxel_preds[v_xy[0], v_xy[1], vz] = config['observation_calc_params']['prob_occ_given_obs_free']
+                    voxel_preds[v_xyz[0], v_xyz[1], v_xyz[2]] = config['observation_calc_params']['prob_occ_given_obs_free']
 
                 cur_depth += (resolution / 2)
 
 
-    print("Done first Depth Loop")
+    print("Done Depth Loop")
     
-    # Make sure obstacles are still set to -1
-    for p_x in range(depth_image.shape[1]):
-        for p_y in range(depth_image.shape[0]):
-            cur_depth = depth_image[p_y, p_x]
-            max_depth = cur_depth + 2
-            while cur_depth < max_depth:
-                world_coords = get_world_coords_from_depth(p_x, p_y, cur_depth, camera_pos, robot_yaw, cam_int_mat)
-
-                # Set voxel pred location to 0 here
-                v_xy = world_to_map(np.array([world_coords[0],world_coords[1]]), resolution, size)
-                
-                if not np.isnan(world_coords[2]):
-                    vz = int(world_coords[2] / z_res)
-                    
-                    if v_xy[0] in range(0, size) and v_xy[1] in range(0, size) and vz in range(0, voxel_preds.shape[2]):
-                        voxel_preds[v_xy[0], v_xy[1], vz] = -1
-
-                cur_depth += (resolution / 2)
-               
-
-    print("Done second Depth Loop")
     return voxel_preds
                 
 
@@ -182,7 +173,7 @@ def get_fov(current_location, config, camera_params, obstacle_map, belief, debug
     return fov, obstacles
 
 
-def obj_detection(vlm, cam_int_mat, dino_model, obj_tp, rgb_img, depth_img, config, camera_pos, robot_yaw, feature=None):
+def obj_detection(vlm, cam_int_mat, dino_model, obj_tp, rgb_img, depth_img, config, camera_pos, camera_pose, feature=None):
     img = rgb_img
     #Image should be torch tensor
     img = Image.fromarray(img).convert('RGB')
@@ -218,7 +209,7 @@ def obj_detection(vlm, cam_int_mat, dino_model, obj_tp, rgb_img, depth_img, conf
 
         cur_depth = depth_img[p_y, p_x]
 
-        real_world_coords.append(get_world_coords_from_depth(p_x, p_y, cur_depth, camera_pos, robot_yaw, cam_int_mat))
+        real_world_coords.append(get_world_coords_from_depth(p_x, p_y, cur_depth, camera_pos, camera_pose, cam_int_mat))
         if feature != None:
             x_min = int((box[0] - box[2]) * cropped_img.shape[1])
             x_max = int((box[0] + box[2]) * cropped_img.shape[1])
@@ -259,17 +250,17 @@ def get_vox_preds(vlm, robot_yaw, camera_pos, camera_pose, belief, obj_tp, rgb_i
     
     # Make 0 in all visible voxels
     resolution = belief.map_params['res']
-    size = belief.map_params['size']
+    dim = belief.map_params['dim']
+    vol_origin = belief.map_params['vol_origin']
 
     print("RESOLUTION IN GET_VOX_PRED: ", resolution)
-    print("AND SIZE: ", size)
+    print("AND DIM: ", dim)
 
-    z_dim_max = belief.z_dim
     print("Starting FOV")
-    voxel_preds = get_fov_from_depth_image(camera_pos, robot_yaw, depth_image, voxel_preds, resolution, belief.map_params['z_res'], size, config, camera_intrinsic_mat)
+    voxel_preds = get_fov_from_depth_image(camera_pos, camera_pose, depth_image, voxel_preds, resolution, belief.map_params['z_res'], dim, vol_origin, config, camera_intrinsic_mat)
    
     # Get object detection
-    boxes, real_world_coords, feature_ret_vals, logits = obj_detection(vlm, camera_intrinsic_mat, dino_model, obj_tp, rgb_image, depth_image, config, camera_pos, robot_yaw, feature=feature)
+    boxes, real_world_coords, feature_ret_vals, logits = obj_detection(vlm, camera_intrinsic_mat, dino_model, obj_tp, rgb_image, depth_image, config, camera_pos, camera_pose, feature=feature)
     
     print("First BOXES")
     feature_vox_ret_vals = []
@@ -278,29 +269,23 @@ def get_vox_preds(vlm, robot_yaw, camera_pos, camera_pose, belief, obj_tp, rgb_i
         print("REAL WORLD: ", x,y,z)
         score = logits[i] 
         
-        xy = [x, y]
         map_resolution = belief.map_params['res']
-        map_size = belief.map_params['size']
-        vxy = world_to_map(xy, map_resolution, map_size)
-
-        vx = vxy[0]
-        vy = vxy[1]
+        map_dim = belief.map_params['dim']
+        vol_origin = belief.map_params['vol_origin']
+        z_resolution = belief.map_params['z_res']
+        vxyz = world_to_map(np.array([x,y,z]), vol_origin, map_resolution, z_resolution, map_dim)
 
         if not np.isnan(z):
-            vz = int(z / belief.map_params['z_res'])
 
-            print("MAP: ", vx, vy, vz)
+            print("MAP: ", vxyz)
 
             # Put score in prediction output
-            if vx < voxel_preds.shape[0] and vx >= 0 and\
-                    vy < voxel_preds.shape[1] and vy >= 0 and\
-                    vz < voxel_preds.shape[2] and vz >= 0:
-                if config['observation_calc_params']['use_model_score']:
-                    voxel_preds[vx, vy, vz] = score
-                else:
-                    voxel_preds[vx, vy, vz] = config['observation_calc_params']['prob_correct_given_observed'] 
+            if config['observation_calc_params']['use_model_score']:
+                voxel_preds[vxyz[0], vxyz[1], vxyz[2]] = score
+            else:
+                voxel_preds[vxyz[0], vxyz[1], vxyz[2]] = config['observation_calc_params']['prob_correct_given_observed'] 
 
-                if feature != None:
-                    feature_vox_ret_vals.append([np.array([vx, vy, vz]), feature_ret_vals[i]])
+            if feature != None:
+                feature_vox_ret_vals.append([vxyz, feature_ret_vals[i]])
             
     return voxel_preds, feature_vox_ret_vals
