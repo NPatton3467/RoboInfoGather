@@ -151,12 +151,15 @@ class POMDP():
         # Check if enough found in symbolic execution
         found_all_obj = True
         current_symbolic_query = self.query.execute(symbolic_info)
+        total_num_found = 0
         for obj_tp in self.bel.keys():
+            if obj_tp in current_symbolic_query:
+                num_found = len(current_symbolic_query[obj_tp])
+                total_num_found+=num_found
             if obj_tp not in current_symbolic_query:
                 found_all_obj = False
                 break
 
-            num_found = len(current_symbolic_query[obj_tp])
             if num_found < self.bel[obj_tp].num or self.bel[obj_tp].num == -1:
                 found_all_obj = False
                 break
@@ -165,14 +168,14 @@ class POMDP():
             akld = self.compute_akld(iterations)
             # Check akld and num found
             if (akld > 0 and akld <= self.configs['bel_params']['akld_stop']) or found_all_obj:
-                print("Done POMDP Execution -- AKLD: ", akld, " Num Found: ", num_found, " Required Number to Find: ", self.bel[obj_tp].num, " found_all_obj: ", found_all_obj)
+                print("Done POMDP Execution -- AKLD: ", akld, " Num Found: ", total_num_found, " Required Number to Find: ", self.bel[obj_tp].num, " found_all_obj: ", found_all_obj)
                 return True, symbolic_info
 
         elif self.explore_stop == "ENTROPY":
             avg_ent = self.compute_average_entropy()
 
             if avg_ent <= self.configs['bel_params']['avg_ent_stop'] or found_all_obj:
-                print("Done POMDP Execution -- ENTROPY: ", avg_ent, " Num Found: ", num_found, " Required Number to Find: ", self.bel[obj_tp].num, " found_all_obj: ", found_all_obj)
+                print("Done POMDP Execution -- ENTROPY: ", avg_ent, " Num Found: ", total_num_found, " Required Number to Find: ", self.bel[obj_tp].num, " found_all_obj: ", found_all_obj)
                 return True, symbolic_info
 
 

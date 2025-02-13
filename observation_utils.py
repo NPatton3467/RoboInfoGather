@@ -174,7 +174,7 @@ def get_fov(current_location, config, camera_params, obstacle_map, belief, debug
 
 
 def obj_detection(vlm, cam_int_mat, dino_model, obj_tp, rgb_img, depth_img, config, camera_pos, camera_pose, feature=None):
-    img = rgb_img
+    img = np.copy(rgb_img)
     #Image should be torch tensor
     img = Image.fromarray(img).convert('RGB')
     transform = T.Compose(
@@ -203,7 +203,7 @@ def obj_detection(vlm, cam_int_mat, dino_model, obj_tp, rgb_img, depth_img, conf
     feature_ret_vals = [] 
     real_world_coords = []
     for box in boxes:
-        cropped_img = rgb_img
+        cropped_img = np.copy(rgb_img)
         p_x = int(box[0] * cropped_img.shape[1])
         p_y = int(box[1] * cropped_img.shape[0])
 
@@ -217,15 +217,22 @@ def obj_detection(vlm, cam_int_mat, dino_model, obj_tp, rgb_img, depth_img, conf
             y_max = int((box[1] + box[3]) * cropped_img.shape[0])
 
             # Don't want to crop to practically 0 pixels
+            print("Pre-Cropped Image Shape: ", cropped_img.shape)
             if (x_max - x_min) >= 5 and (y_max - y_min) >= 5:
                 cropped_img = cropped_img[y_min:y_max, x_min:x_max, :]
             
             img = Image.fromarray(cropped_img).convert('RGB')
     
             # Query VLM
-            prompt = f"Given the image and object type `{obj_tp}`, what is the value of the feature `{feature}`? Please respond with only the answer to the above question."
+            prompt = f"Given the image and object type `{obj_tp}`, what is the value of the feature `{feature}`? Please respond with only the value of the feature."
 
             response = vlm.generate(prompt, img)
+            
+            print("Response: ", response)
+            print("Cropped Image Shape: ", cropped_img.shape)
+            #plt.close('all')
+            #plt.imshow(cropped_img)
+            #plt.show()
 
             feature_ret_vals.append(response)
 
