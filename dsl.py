@@ -270,7 +270,7 @@ class Query:
         if self.result == None:
             self.result = self.where_clause.filter(copy.deepcopy(symbolic_info))
             
-            print(self.result)
+            print("Current result in Query:\n", self.result)
             if self.obj_tp in self.result and len(self.result[self.obj_tp]) > self.limit and self.limit > 0:
                 self.result[self.obj_tp] = self.result[self.obj_tp][0:self.limit]
 
@@ -420,7 +420,7 @@ class WhereClause:
             temp_dict1 = {}
             temp_dict2 = {}
             if self.obj_tp in symbolic_info:
-                print("Symbolic Info:\n", symbolic_info)
+                print("Current Symbolic Info (spatial_rel):\n", symbolic_info)
                 for inst1 in symbolic_info[self.obj_tp]:
                     if self.obj_tp2 in symbolic_info:
                         for inst2 in symbolic_info[self.obj_tp2]:
@@ -431,7 +431,8 @@ class WhereClause:
                             
                             loc1 = symbolic_info[self.obj_tp][inst1]['location']
                             loc2 = symbolic_info[self.obj_tp2][inst2]['location']
-                            prompt = pre_prompt + f"\n\nNow given object (1) of type {self.obj_tp} with location {loc1}, and object (2) of type {self.obj_tp2} with location {loc2}. Is object (1) {self.spatial_relation} object (2)? Please answer with only True or False.\nAnswer : " 
+                            prompt = pre_prompt + f"\n\nNow given object (1) of type {self.obj_tp} with location {loc1}, and object (2) of type {self.obj_tp2} with location {loc2}. Is object (1) {self.spatial_relation} object (2)? Please answer with only True or False.\nAnswer:" 
+                            #print("\nSpatial Relation Locations:\n", loc1, "\n", loc2)
                             client = OpenAI(api_key=openai_api_key)
                             response = client.chat.completions.create(
                                 model="gpt-4",
@@ -442,6 +443,8 @@ class WhereClause:
 
                             # Extract response
                             response = response.choices[0].message.content
+                            response = response.strip(' \n')
+                            #print("\nSpatial Relation Response:\n", response)
                             if response == "True" or response == "true":
                                 # Append "spatial_rel" to the temp_dist 1
                                 temp_inst_dict1 = symbolic_info[self.obj_tp][inst1]
@@ -453,8 +456,13 @@ class WhereClause:
             ret_symb_info[self.obj_tp2] = temp_dict2
 
         elif self.where_tp == "and":
-            ret_symb_info = self.sub_where_clause[0].filter(symbolic_info)
-            ret_symb_info = self.sub_where_clause[1].filter(ret_symb_info)
+            # Check if sub_where is binary predicate -- need to evaluate first
+            if self.sub_where_clause[1].where_tp == "spatial_rel":
+                ret_symb_info = self.sub_where_clause[1].filter(symbolic_info)
+                ret_symb_info = self.sub_where_clause[0].filter(ret_symb_info)
+            else:
+                ret_symb_info = self.sub_where_clause[0].filter(symbolic_info)
+                ret_symb_info = self.sub_where_clause[1].filter(ret_symb_info)
 
         elif self.where_tp == "or":
             left_symb_info = self.sub_where_clause[0].filter(symbolic_info)

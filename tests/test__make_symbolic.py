@@ -13,14 +13,16 @@ from PIL import Image
 
 
 # Load the config
-config_filename = os.path.join(f"/robodata/user_data/npatt/explore-eqa/RoboInfoGather/info_gather.yaml")
+config_filename = os.path.join(f"/robodata/user_data/npatt/explore-eqa/RoboInfoGather/info_gather_main.yaml")
 config = yaml.load(open(config_filename, "r"), Loader=yaml.FullLoader)
 
 # Get Position/orientation
 pos = np.array([0,0,0])
 angle = 0
-size = 50
+dim = np.array([100, 100, 50])
 resolution = 0.1
+vol_origin = np.array([0,0,0])
+
 
 
 # # One cup, no whereclause = True
@@ -33,8 +35,9 @@ new_pomdp = gen_pomdp_from_query(
         query=new_query,
         pos=pos,
         yaw=angle,
-        trav_map_og_size=size,
+        trav_map_og_dim=dim,
         trav_map_og_res=resolution,
+        vol_origin=vol_origin,
         configs=config
     )
 
@@ -54,10 +57,12 @@ new_pomdp = gen_pomdp_from_query(
         query=new_query,
         pos=pos,
         yaw=angle,
-        trav_map_og_size=size,
+        trav_map_og_dim=dim,
         trav_map_og_res=resolution,
+        vol_origin=vol_origin,
         configs=config
     )
+
 
 new_pomdp.bel['cup'].p[10,10,10] = 0.95
 new_pomdp.bel['cup'].p[15,10,10] = 0.95
@@ -82,8 +87,9 @@ new_pomdp = gen_pomdp_from_query(
         query=new_query,
         pos=pos,
         yaw=angle,
-        trav_map_og_size=size,
+        trav_map_og_dim=dim,
         trav_map_og_res=resolution,
+        vol_origin=vol_origin,
         configs=config
     )
 
@@ -126,8 +132,9 @@ new_pomdp = gen_pomdp_from_query(
         query=new_query,
         pos=pos,
         yaw=angle,
-        trav_map_og_size=size,
+        trav_map_og_dim=dim,
         trav_map_og_res=resolution,
+        vol_origin=vol_origin,
         configs=config
     )
 
@@ -185,10 +192,12 @@ new_pomdp = gen_pomdp_from_query(
         query=new_query,
         pos=pos,
         yaw=angle,
-        trav_map_og_size=size,
+        trav_map_og_dim=dim,
         trav_map_og_res=resolution,
+        vol_origin=vol_origin,
         configs=config
     )
+
 
 new_pomdp.bel['cup'].p[10,10,10] = 0.95
 new_pomdp.bel['cup'].feature_bels['colour']['bel'][10,10,10] = 0.95
@@ -248,8 +257,9 @@ new_pomdp = gen_pomdp_from_query(
         query=new_query,
         pos=pos,
         yaw=angle,
-        trav_map_og_size=size,
+        trav_map_og_dim=dim,
         trav_map_og_res=resolution,
+        vol_origin=vol_origin,
         configs=config
     )
 
@@ -290,8 +300,9 @@ new_pomdp = gen_pomdp_from_query(
         query=new_map,
         pos=pos,
         yaw=angle,
-        trav_map_og_size=size,
+        trav_map_og_dim=dim,
         trav_map_og_res=resolution,
+        vol_origin=vol_origin,
         configs=config
     )
 
@@ -333,8 +344,9 @@ new_pomdp = gen_pomdp_from_query(
         query=new_map,
         pos=pos,
         yaw=angle,
-        trav_map_og_size=size,
+        trav_map_og_dim=dim,
         trav_map_og_res=resolution,
+        vol_origin=vol_origin,
         configs=config
     )
 
@@ -387,8 +399,9 @@ new_pomdp = gen_pomdp_from_query(
         query=new_getnth,
         pos=pos,
         yaw=angle,
-        trav_map_og_size=size,
+        trav_map_og_dim=dim,
         trav_map_og_res=resolution,
+        vol_origin=vol_origin,
         configs=config
     )
 
@@ -440,8 +453,9 @@ new_pomdp = gen_pomdp_from_query(
         query=new_count,
         pos=pos,
         yaw=angle,
-        trav_map_og_size=size,
+        trav_map_og_dim=dim,
         trav_map_og_res=resolution,
+        vol_origin=vol_origin,
         configs=config
     )
 
@@ -484,8 +498,9 @@ new_pomdp = gen_pomdp_from_query(
         query=new_agg,
         pos=pos,
         yaw=angle,
-        trav_map_og_size=size,
+        trav_map_og_dim=dim,
         trav_map_og_res=resolution,
+        vol_origin=vol_origin,
         configs=config
     )
 
@@ -543,8 +558,9 @@ new_pomdp = gen_pomdp_from_query(
         query=new_prim,
         pos=pos,
         yaw=angle,
-        trav_map_og_size=size,
+        trav_map_og_dim=dim,
         trav_map_og_res=resolution,
+        vol_origin=vol_origin,
         configs=config
     )
 

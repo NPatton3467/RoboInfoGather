@@ -75,30 +75,36 @@ class POMDP():
             # TODO: There has to be a better way to do this
             cur_obj_dict = {}
             instance_count = 0
-            for x in range(local_bel_shape[0]):
-                for y in range(local_bel_shape[1]):
-                    for z in range(local_bel_shape[2]):
+            xyzs = torch.argwhere(local_bel.p > local_bel.threshold)
+            for (xt, yt, zt) in xyzs:
+            #for x in range(local_bel_shape[0]):
+            #    for y in range(local_bel_shape[1]):
+            #        for z in range(local_bel_shape[2]):
                         # If passes existence threshold add to objects
-                        if local_bel.p[x, y, z] > local_bel.threshold:
-                            # Check features (this is only enum features)
-                            feature_dict = {}
-                            for feature in local_bel.feature_bels:
-                                feature_val = local_bel.feature_bels[feature]['vals'][x,y,z]
-                                if type(feature_val) is torch.Tensor:
-                                    feature_val = float(feature_val.detach().cpu())
+            #            if local_bel.p[x, y, z] > local_bel.threshold:
+                # Check features (this is only enum features)
+                x = int(xt.detach().cpu())
+                y = int(yt.detach().cpu())
+                z = int(zt.detach().cpu())
+                print(x, y, z)
+                feature_dict = {}
+                for feature in local_bel.feature_bels:
+                    feature_val = local_bel.feature_bels[feature]['vals'][x,y,z]
+                    if type(feature_val) is torch.Tensor:
+                        feature_val = float(feature_val.detach().cpu())
 
-                                feature_dict[feature] = feature_val
-                            
-                            map_resolution = local_bel.map_params['res']
-                            z_resolution = local_bel.map_params['z_res']
-                            vol_origin = local_bel.map_params['vol_origin']
-                            
-                            w_xyz = map_to_world(np.array([x,y,z]), vol_origin, map_resolution, z_resolution)
-                            feature_dict['location'] = (w_xyz[0],w_xyz[1],w_xyz[2])
+                    feature_dict[feature] = feature_val
+                
+                map_resolution = local_bel.map_params['res']
+                z_resolution = local_bel.map_params['z_res']
+                vol_origin = local_bel.map_params['vol_origin']
+                
+                w_xyz = map_to_world(np.array([x,y,z]), vol_origin, map_resolution, z_resolution)
+                feature_dict['location'] = (w_xyz[0],w_xyz[1],w_xyz[2])
 
-                            cur_obj_dict[instance_count] = feature_dict
+                cur_obj_dict[instance_count] = feature_dict
 
-                            instance_count += 1
+                instance_count += 1
 
             symbolic_info[obj_tp] = cur_obj_dict
         
