@@ -67,6 +67,32 @@ def eval_similarity(nl_ans, text_answer):
 
     return str_score
 
+def eval_feature_equality(found_feature_val, comp, real_feature_val):
+    f = open('./RoboInfoGather/eval_feature_pre_prompt.txt', 'r')
+    pre_prompt = f.read()
+    f.close()
+
+    post_prompt = f"\nNow given feature (1) {found_feature_val}, and feature (2) {real_feature_val}, evaluate whether feature (1) is equivalent to feature (2). Please answer with only equal or not equal.\nAnswer:\n"
+
+    prompt = pre_prompt + post_prompt
+
+    client = OpenAI(api_key=openai_api_key)
+    response = client.chat.completions.create(
+        model="gpt-4",
+        messages=[{"role": "user", "content": f"{prompt}"}],
+        stream=False,
+        temperature=0.0
+    )
+
+    response = response.choices[0].message.content
+
+    truth_val = False
+    if (response.lower() == "equal" and comp == "==") or\
+            (response.lower() == "not equal" and comp == "!="):
+        truth_val = True
+
+    return truth_val
+
 
 def get_objects_and_features_helper(component):
     # Start with list and then unify

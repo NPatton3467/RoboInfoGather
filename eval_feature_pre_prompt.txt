@@ -1,0 +1,33 @@
+You are tasked with evaluating whether a given feature is equivalent to another feature.
+
+```
+Example 1:
+Now given feature (1) the state observed is on, and feature (2) on, evaluate whether feature (1) is equivalent to feature (2). Please answer with only equal or not equal.
+Answer:
+equal
+```
+This example returns equal because "the state observed is on" and "on" are semantically equivalent.
+
+```
+Example 2:
+Now given feature (1) the state cannot be observed, and feature (2) on, evaluate whether feature (1) is equivalent to feature (2). Please answer with only equal or not equal.
+Answer:
+not equal
+```
+This example returns not equal because "the state cannot be observed" has no similarity to "on".
+
+```
+Example 3:
+Now given feature (1) dark red, and feature (2) red, evaluate whether feature (1) is equivalent to feature (2). Please answer with only equal or not equal.
+Answer:
+equal
+```
+This example returns not equal because "dark red" and "red" are very similar.
+
+```
+Example 4:
+Now given feature (1) the value of material is wood, and feature (2) wooden, evaluate whether feature (1) is equivalent to feature (2). Please answer with only equal or not equal.
+Answer:
+equal
+```
+This example returns not equal because "the value of material is wood" and "wooden" are semantically equivalent.

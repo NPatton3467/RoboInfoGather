@@ -1,8 +1,11 @@
 import copy
 import numpy as np
 
+from RoboInfoGather.program_utils import *
+
 import openai
 from openai import OpenAI
+
 f = open('/robodata/user_data/npatt/explore-eqa/RoboInfoGather/openaikey.txt', 'r')
 openai_api_key = f.read().rstrip('\n')
 f.close()
@@ -378,11 +381,23 @@ class WhereClause:
             temp_dict = {}
             if self.obj_tp in symbolic_info:
                 for inst in symbolic_info[self.obj_tp]:
-                    if self.where_tp == "feature_enum":
+                    if self.where_tp == "feature_enum" and (comp == "==" or comp == "!="):
+                        if self.enum_feature in symbolic_info[self.obj_tp][inst]:
+                            # Use LLM to evaluate feature
+                            eval_true = eval_feature_equality(symbolic_info[self.obj_tp][inst][self.enum_feature], comp, self.enum_param)
+                            if eval_true:
+                                # Make proper feature based on enum_param
+                                temp_inst_dict = symbolic_info[self.obj_tp][inst]
+                                if comp == "==":
+                                    temp_inst_dict[self.enum_feature] = self.enum_param
+
+                                temp_dict[inst] = temp_inst_dict
+
+                    elif self.where_tp == "feature_enum":
                         if self.enum_feature in symbolic_info[self.obj_tp][inst] and\
-                          eval(f"'{symbolic_info[self.obj_tp][inst][self.enum_feature]}' {comp} '{self.enum_param}'"):
+                            eval(f"'{symbolic_info[self.obj_tp][inst][self.enum_feature]}' {comp} '{self.enum_param}'"):
                             
-                            temp_dict[inst] = symbolic_info[self.obj_tp][inst]
+                                temp_dict[inst] = symbolic_info[self.obj_tp][inst]
 
                     elif self.where_tp == "feature_scalar":
                         if self.scalar_feature in symbolic_info[self.obj_tp][inst] and\
