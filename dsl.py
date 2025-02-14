@@ -61,26 +61,23 @@ class Map:
         self.map_feature = map_feature
         self.query = query
 
-        self.result = {}
-
     def pretty_str(self):
         return f"map({self.obj_tp}, {self.map_feature}, {self.query.pretty_str()})"
 
     def execute(self, symbolic_info):
         # Query must have been executed in real world to get symbolic results
-        if self.query.result == None:
-            self.query.execute(symbolic_info)
+        query_result = self.query.execute(symbolic_info)
 
-        if self.result == {}:
-            if self.obj_tp in self.query.result:
-                local_dict = {}
-                for obj_inst in self.query.result[self.obj_tp]:
-                    local_dict[obj_inst] = {}
-                    local_dict[obj_inst][self.map_feature] = self.query.result[self.obj_tp][obj_inst][self.map_feature]
+        result = {}
+        if self.obj_tp in query_result:
+            local_dict = {}
+            for obj_inst in query_result[self.obj_tp]:
+                local_dict[obj_inst] = {}
+                local_dict[obj_inst][self.map_feature] = query_result[self.obj_tp][obj_inst][self.map_feature]
 
-                self.result[self.obj_tp] = local_dict
+            result[self.obj_tp] = local_dict
 
-        return self.result
+        return result
 
 class Primitives:
     def __init__(self, prim_tp, prim, prim2=None, prim_op=None):
@@ -88,9 +85,6 @@ class Primitives:
         self.prim = prim
         self.prim2 = prim2
         self.prim_op = prim_op
-
-        # Result to be filled
-        self.result = None
 
     def pretty_str(self):
         if self.prim_tp == 'real':
@@ -112,51 +106,47 @@ class Primitives:
             return f"{self.prim.pretty_str()}"
 
     def execute(self, symbolic_info):
-        if self.result == None:
-            if self.prim_tp == "real":
-                self.result = self.prim
-            elif self.prim_tp == "op":
-                # Execute left and right primitives
-                left = 0
-                right = 0
-                if type(self.prim) in [GetNth, Count, Aggregator]:
-                    if self.prim.result == None:
-                        self.prim.execute(symbolic_info)
+        if self.prim_tp == "real":
+            result = self.prim
+        elif self.prim_tp == "op":
+            # Execute left and right primitives
+            left = 0
+            right = 0
+            if type(self.prim) in [GetNth, Count, Aggregator]:
+                prim_result = self.prim.execute(symbolic_info)
 
-                    left = self.prim.result
-                else:
-                    left = self.prim
-                
-                if type(self.prim2) in [GetNth, Count, Aggregator]:
-                    if self.prim2.result == None:
-                        self.prim2.execute(symbolic_info)
-
-                    right = self.prim2.result
-                else:
-                    right = self.prim2
-
+                left = prim_result
+            else:
+                left = self.prim
             
-                # Perform the operation
-                if self.prim_op == "plus":
-                    self.result = left + right
-                elif self.prim_op == "minus":
-                    self.result = left - right
-                elif self.prim_op == "mul":
-                    self.result = left * right
-                elif self.prim_op == "div":
-                    self.result = left / right
+            if type(self.prim2) in [GetNth, Count, Aggregator]:
+                prim2_result = self.prim2.execute(symbolic_info)
+
+                right = prim2_result
+            else:
+                right = self.prim2
+
+        
+            # Perform the operation
+            if self.prim_op == "plus":
+                result = left + right
+            elif self.prim_op == "minus":
+                result = left - right
+            elif self.prim_op == "mul":
+                result = left * right
+            elif self.prim_op == "div":
+                result = left / right
+
+        else:
+            if type(self.prim) in [GetNth, Count, Aggregator]:
+                prim_result = self.prim.execute()
+
+                result = prim_result
 
             else:
-                if type(self.prim) in [GetNth, Count, Aggregator]:
-                    if self.prim.result == None:
-                        self.prim.execute()
+                result = self.prim
 
-                    self.result = self.prim.result
-
-                else:
-                    self.result = self.prim
-
-        return self.result
+        return result
 
 
 class GetNth:
@@ -164,29 +154,25 @@ class GetNth:
         self.list = symbolic_list
         self.index = index 
 
-        # Result
-        self.result = {}
-
     def pretty_str(self):
         return f"getNth({self.list.pretty_str()}, {self.index})"
 
     def execute(self, symbolic_info):
+        result = {}
         # List must have been evaluated
         print("In GetNth... Symbolic Info: ", symbolic_info)
-        if self.list.result == {}:
-            self.list.execute(symbolic_info)
+        list_result = self.list.execute(symbolic_info)
 
-        if self.result == {}:
-            print("In GetNth... self.list.result: ", self.list.result)
-            obj_tp = list(self.list.result.keys())[0]
-            if obj_tp in self.list.result:
-                print("In GetNth... obj_tp: ", obj_tp)
-                key = list(self.list.result[obj_tp].keys())[self.index]
-                print("In GetNth... key: ", key)
-                if key in self.list.result[obj_tp]:
-                    self.result[obj_tp] = self.list.result[obj_tp][key]
+        print("In GetNth... self.list.result: ", list_result)
+        obj_tp = list(list_result.keys())[0]
+        if obj_tp in list_result:
+            print("In GetNth... obj_tp: ", obj_tp)
+            key = list(list_result[obj_tp].keys())[self.index]
+            print("In GetNth... key: ", key)
+            if key in list_result[obj_tp]:
+                result[obj_tp] = list_result[obj_tp][key]
 
-        return self.result
+        return result
 
 
 class Count:
@@ -194,22 +180,18 @@ class Count:
         self.query = query
         self.obj_tp = obj_tp
 
-        # Result
-        self.result = {}
-
     def pretty_str(self):
         return f"count({self.query.pretty_str()}, {self.obj_tp})"
 
     def execute(self, symbolic_info):
         # Query must have been executed in the real world
-        if self.query.result == None:
-            self.query.execute(symbolic_info)
+        result = {}
+        query_result = self.query.execute(symbolic_info)
 
-        if self.result == {}:
-            if self.obj_tp in self.query.result:
-                self.result[self.obj_tp] = {"Count" : len(self.query.result[self.obj_tp])}
+        if self.obj_tp in query_result:
+            result[self.obj_tp] = {"Count" : len(query_result[self.obj_tp])}
 
-        return self.result
+        return result
 
 
 class Aggregator:
@@ -217,65 +199,61 @@ class Aggregator:
         self.agg_tp = agg_tp
         self.list = symbolic_list
 
-        # Result
-        self.result = None
-
     def pretty_str(self):
         return f"{self.agg_tp}({self.list.pretty_str()})"
 
     def execute(self, symbolic_info):
         # List must have been completed
-        if self.list.result == {}:
-            self.list.execute(symbolic_info)
+        list_result = self.list.execute(symbolic_info)
 
-        if self.result == None:
-            if self.agg_tp == "sum":
-                tsum = 0
-                obj_tp = list(self.list.result.keys())[0]
+        result = None
+        if self.agg_tp == "sum":
+            tsum = 0
+            obj_tp = list(list_result.keys())[0]
 
-                if obj_tp in self.list.result:
-                    for inst in self.list.result[obj_tp]:
-                        feature = list(self.list.result[obj_tp][inst].keys())[0]
-                        tsum += self.list.result[obj_tp][inst][feature]
+            if obj_tp in list_result:
+                for inst in list_result[obj_tp]:
+                    feature = list(list_result[obj_tp][inst].keys())[0]
+                    tsum += list_result[obj_tp][inst][feature]
 
-                self.result = {obj_tp : {f'Total {feature}' : tsum}}
+            result = {obj_tp : {f'Total {feature}' : tsum}}
 
-            elif self.agg_tp == "avg":
-                avg = 0
-                obj_tp = list(self.list.result.keys())[0]
+        elif self.agg_tp == "avg":
+            avg = 0
+            obj_tp = list(list_result.keys())[0]
 
-                if obj_tp in self.list.result:
-                    for inst in self.list.result[obj_tp]:
-                        feature = list(self.list.result[obj_tp][inst].keys())[0]
-                        avg += self.list.result[obj_tp][inst][feature]
+            if obj_tp in list_result:
+                for inst in list_result[obj_tp]:
+                    feature = list(list_result[obj_tp][inst].keys())[0]
+                    avg += list_result[obj_tp][inst][feature]
 
-                self.result = {obj_tp : {f'Average {feature}' : avg/len(self.list.result[obj_tp])}}
+            result = {obj_tp : {f'Average {feature}' : avg/len(list_result[obj_tp])}}
 
-            elif self.agg_tp == "min":
-                tmin = -1
-                obj_tp = list(self.list.result.keys())[0]
+        elif self.agg_tp == "min":
+            tmin = -1
+            obj_tp = list(list_result.keys())[0]
 
-                if obj_tp in self.list.result:
-                    for inst in self.list.result[obj_tp]:
-                        feature = list(self.list.result[obj_tp][inst].keys())[0]
-                        if self.list.result[obj_tp][inst][feature] < tmin or tmin == -1:
-                            tmin += self.list.result[obj_tp][inst][feature]
+            if obj_tp in list_result:
+                for inst in list_result[obj_tp]:
+                    feature = list(list_result[obj_tp][inst].keys())[0]
+                    if list_result[obj_tp][inst][feature] < tmin or tmin == -1:
+                        tmin += list_result[obj_tp][inst][feature]
 
-                self.result = {obj_tp : {f'Minimum {feature}' : tmin}}
+            result = {obj_tp : {f'Minimum {feature}' : tmin}}
 
-            elif self.agg_tp == "max":
-                tmax = -1
-                obj_tp = list(self.list.result.keys())[0]
+        elif self.agg_tp == "max":
+            tmax = -1
+            obj_tp = list(list_result.keys())[0]
 
-                if obj_tp in self.list.result:
-                    for inst in self.list.result[obj_tp]:
-                        feature = list(self.list.result[obj_tp][inst].keys())[0]
-                        if self.list.result[obj_tp][inst][feature] > tmax or tmax == -1:
-                            tmax += self.list.result[obj_tp][inst][feature]
+            if obj_tp in list_result:
+                for inst in list_result[obj_tp]:
+                    feature = list(list_result[obj_tp][inst].keys())[0]
+                    if list_result[obj_tp][inst][feature] > tmax or tmax == -1:
+                        tmax += list_result[obj_tp][inst][feature]
 
-                self.result = {obj_tp : {f'Maximum {feature}' : tmax}}
+            result = {obj_tp : {f'Maximum {feature}' : tmax}}
 
-        return self.result
+        return result
 
 
 class Query:
@@ -284,9 +262,6 @@ class Query:
         self.where_clause = where_clause
         self.limit = limit
         self.threshold = threshold
-
-        # Result of executing Query
-        self.result = None
 
     def pretty_str(self):
         res = f'find ({self.obj_tp}) where ({self.where_clause.pretty_str()})'
@@ -298,14 +273,13 @@ class Query:
         return res
 
     def execute(self, symbolic_info):
-        if self.result == None:
-            self.result = self.where_clause.filter(copy.deepcopy(symbolic_info))
-            
-            print("Current result in Query:\n", self.result)
-            if self.obj_tp in self.result and len(self.result[self.obj_tp]) > self.limit and self.limit > 0:
-                self.result[self.obj_tp] = self.result[self.obj_tp][0:self.limit]
+        result = self.where_clause.filter(copy.deepcopy(symbolic_info))
+        
+        print("Current result in Query:\n", result)
+        if self.obj_tp in result and len(result[self.obj_tp]) > self.limit and self.limit > 0:
+            result[self.obj_tp] = result[self.obj_tp][0:self.limit]
 
-        return self.result
+        return result
 
 
 class WhereClause:

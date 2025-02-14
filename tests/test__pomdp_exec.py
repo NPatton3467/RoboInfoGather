@@ -33,8 +33,9 @@ new_pomdp = gen_pomdp_from_query(
         query=new_query,
         pos=pos,
         yaw=angle,
-        trav_map_og_size=size,
+        trav_map_og_dim=dim,
         trav_map_og_res=resolution,
+        vol_origin=vol_origin,
         configs=config
     )
 
@@ -56,8 +57,9 @@ new_pomdp = gen_pomdp_from_query(
         query=new_query,
         pos=pos,
         yaw=angle,
-        trav_map_og_size=size,
+        trav_map_og_dim=dim,
         trav_map_og_res=resolution,
+        vol_origin=vol_origin,
         configs=config
     )
 
@@ -87,8 +89,9 @@ new_pomdp = gen_pomdp_from_query(
         query=new_query,
         pos=pos,
         yaw=angle,
-        trav_map_og_size=size,
+        trav_map_og_dim=dim,
         trav_map_og_res=resolution,
+        vol_origin=vol_origin,
         configs=config
     )
 
@@ -134,8 +137,9 @@ new_pomdp = gen_pomdp_from_query(
         query=new_query,
         pos=pos,
         yaw=angle,
-        trav_map_og_size=size,
+        trav_map_og_dim=dim,
         trav_map_og_res=resolution,
+        vol_origin=vol_origin,
         configs=config
     )
 
@@ -181,8 +185,9 @@ new_pomdp = gen_pomdp_from_query(
         query=new_query,
         pos=pos,
         yaw=angle,
-        trav_map_og_size=size,
+        trav_map_og_dim=dim,
         trav_map_og_res=resolution,
+        vol_origin=vol_origin,
         configs=config
     )
 
@@ -242,8 +247,9 @@ new_pomdp = gen_pomdp_from_query(
         query=new_query,
         pos=pos,
         yaw=angle,
-        trav_map_og_size=size,
+        trav_map_og_dim=dim,
         trav_map_og_res=resolution,
+        vol_origin=vol_origin,
         configs=config
     )
 
@@ -307,8 +313,9 @@ new_pomdp = gen_pomdp_from_query(
         query=new_query,
         pos=pos,
         yaw=angle,
-        trav_map_og_size=size,
+        trav_map_og_dim=dim,
         trav_map_og_res=resolution,
+        vol_origin=vol_origin,
         configs=config
     )
 
@@ -351,8 +358,9 @@ new_pomdp = gen_pomdp_from_query(
         query=new_map,
         pos=pos,
         yaw=angle,
-        trav_map_og_size=size,
+        trav_map_og_dim=dim,
         trav_map_og_res=resolution,
+        vol_origin=vol_origin,
         configs=config
     )
 
@@ -396,8 +404,9 @@ new_pomdp = gen_pomdp_from_query(
         query=new_map,
         pos=pos,
         yaw=angle,
-        trav_map_og_size=size,
+        trav_map_og_dim=dim,
         trav_map_og_res=resolution,
+        vol_origin=vol_origin,
         configs=config
     )
 
@@ -452,8 +461,9 @@ new_pomdp = gen_pomdp_from_query(
         query=new_getnth,
         pos=pos,
         yaw=angle,
-        trav_map_og_size=size,
+        trav_map_og_dim=dim,
         trav_map_og_res=resolution,
+        vol_origin=vol_origin,
         configs=config
     )
 
@@ -507,8 +517,9 @@ new_pomdp = gen_pomdp_from_query(
         query=new_count,
         pos=pos,
         yaw=angle,
-        trav_map_og_size=size,
+        trav_map_og_dim=dim,
         trav_map_og_res=resolution,
+        vol_origin=vol_origin,
         configs=config
     )
 
@@ -553,8 +564,9 @@ new_pomdp = gen_pomdp_from_query(
         query=new_agg,
         pos=pos,
         yaw=angle,
-        trav_map_og_size=size,
+        trav_map_og_dim=dim,
         trav_map_og_res=resolution,
+        vol_origin=vol_origin,
         configs=config
     )
 
