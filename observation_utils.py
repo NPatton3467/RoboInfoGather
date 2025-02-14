@@ -224,7 +224,7 @@ def obj_detection(vlm, cam_int_mat, dino_model, obj_tp, rgb_img, depth_img, conf
             img = Image.fromarray(cropped_img).convert('RGB')
     
             # Query VLM
-            prompt = f"Given the image and object type `{obj_tp}`, what is the value of the feature `{feature}`? Please respond with only the value of the feature."
+            prompt = f"Given the image and object type: {obj_tp}, what is the value of the feature: {feature}? Please respond with only the value of the feature."
 
             response = vlm.generate(prompt, img)
             

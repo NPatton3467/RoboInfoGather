@@ -77,11 +77,6 @@ class POMDP():
             instance_count = 0
             xyzs = torch.argwhere(local_bel.p > local_bel.threshold)
             for (xt, yt, zt) in xyzs:
-            #for x in range(local_bel_shape[0]):
-            #    for y in range(local_bel_shape[1]):
-            #        for z in range(local_bel_shape[2]):
-                        # If passes existence threshold add to objects
-            #            if local_bel.p[x, y, z] > local_bel.threshold:
                 # Check features (this is only enum features)
                 x = int(xt.detach().cpu())
                 y = int(yt.detach().cpu())

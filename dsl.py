@@ -148,13 +148,17 @@ class GetNth:
 
     def execute(self, symbolic_info):
         # List must have been evaluated
+        print("In GetNth... Symbolic Info: ", symbolic_info)
         if self.list.result == {}:
             self.list.execute(symbolic_info)
 
         if self.result == {}:
+            print("In GetNth... self.list.result: ", self.list.result)
             obj_tp = list(self.list.result.keys())[0]
             if obj_tp in self.list.result:
+                print("In GetNth... obj_tp: ", obj_tp)
                 key = list(self.list.result[obj_tp].keys())[self.index]
+                print("In GetNth... key: ", key)
                 if key in self.list.result[obj_tp]:
                     self.result[obj_tp] = self.list.result[obj_tp][key]
 
