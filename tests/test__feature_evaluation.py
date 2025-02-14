@@ -1,4 +1,4 @@
-from RoboInfoGather.program_utils import *
+from RoboInfoGather.dsl import *
 
 f_found = "The chair is made of metal"
 f_real = "Metalic"

@@ -1,14 +1,38 @@
 import copy
 import numpy as np
-
-from RoboInfoGather.program_utils import *
-
 import openai
 from openai import OpenAI
 
 f = open('/robodata/user_data/npatt/explore-eqa/RoboInfoGather/openaikey.txt', 'r')
 openai_api_key = f.read().rstrip('\n')
 f.close()
+
+def eval_feature_equality(found_feature_val, comp, real_feature_val):
+    f = open('./RoboInfoGather/eval_feature_pre_prompt.txt', 'r')
+    pre_prompt = f.read()
+    f.close()
+
+    post_prompt = f"\nNow given feature (1) {found_feature_val}, and feature (2) {real_feature_val}, evaluate whether feature (1) is equivalent to feature (2). Please answer with only equal or not equal.\nAnswer:\n"
+
+    prompt = pre_prompt + post_prompt
+
+    client = OpenAI(api_key=openai_api_key)
+    response = client.chat.completions.create(
+        model="gpt-4",
+        messages=[{"role": "user", "content": f"{prompt}"}],
+        stream=False,
+        temperature=0.0
+    )
+
+    response = response.choices[0].message.content
+
+    truth_val = False
+    if (response.lower() == "equal" and comp == "==") or\
+            (response.lower() == "not equal" and comp == "!="):
+        truth_val = True
+
+    return truth_val
+
 
 class Prog:
     def __init__(self, expressions):
