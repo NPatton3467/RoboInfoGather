@@ -18,7 +18,7 @@ def eval_feature_equality(found_feature_val, comp, real_feature_val):
 
     client = OpenAI(api_key=openai_api_key)
     response = client.chat.completions.create(
-        model="gpt-4",
+        model="gpt-4o-mini-2024-07-18",
         messages=[{"role": "user", "content": f"{prompt}"}],
         stream=False,
         temperature=0.0
@@ -381,10 +381,10 @@ class WhereClause:
                 comp = "!="
 
             temp_dict = {}
-            if self.obj_tp in symbolic_info:
-                for inst in symbolic_info[self.obj_tp]:
+            if self.obj_tp in symbolic_info.keys():
+                for inst in symbolic_info[self.obj_tp].keys():
                     if self.where_tp == "feature_enum" and (comp == "==" or comp == "!="):
-                        if self.enum_feature in symbolic_info[self.obj_tp][inst]:
+                        if self.enum_feature in symbolic_info[self.obj_tp][inst].keys():
                             # Use LLM to evaluate feature
                             eval_true = eval_feature_equality(symbolic_info[self.obj_tp][inst][self.enum_feature], comp, self.enum_param)
                             if eval_true:
@@ -396,13 +396,13 @@ class WhereClause:
                                 temp_dict[inst] = temp_inst_dict
 
                     elif self.where_tp == "feature_enum":
-                        if self.enum_feature in symbolic_info[self.obj_tp][inst] and\
+                        if self.enum_feature in symbolic_info[self.obj_tp][inst].keys() and\
                             eval(f"'{symbolic_info[self.obj_tp][inst][self.enum_feature]}' {comp} '{self.enum_param}'"):
                             
                                 temp_dict[inst] = symbolic_info[self.obj_tp][inst]
 
                     elif self.where_tp == "feature_scalar":
-                        if self.scalar_feature in symbolic_info[self.obj_tp][inst] and\
+                        if self.scalar_feature in symbolic_info[self.obj_tp][inst].keys() and\
                           eval(f"{symbolic_info[self.obj_tp][inst][self.scalar_feature]} {comp} {self.scalar_param}"):
                             
                             temp_dict[inst] = symbolic_info[self.obj_tp][inst]
@@ -412,9 +412,9 @@ class WhereClause:
         elif self.where_tp == "max":
             temp_obj = None
             max_val = -1
-            if self.obj_tp in symbolic_info:
-                for inst in symbolic_info[self.obj_tp]:
-                    if self.scalar_feature in symbolic_info[self.obj_tp][inst] and\
+            if self.obj_tp in symbolic_info.keys():
+                for inst in symbolic_info[self.obj_tp].keys():
+                    if self.scalar_feature in symbolic_info[self.obj_tp][inst].keys() and\
                      (symbolic_info[self.obj_tp][inst][self.scalar_feature] > max_val or max_val == -1):
                         temp_obj = {inst: symbolic_info[self.obj_tp][inst]}
                         max_val = symbolic_info[self.obj_tp][inst][self.scalar_feature]
@@ -424,9 +424,9 @@ class WhereClause:
         elif self.where_tp == "min":
             temp_obj = None
             min_val = -1
-            if self.obj_tp in symbolic_info:
-                for inst in symbolic_info[self.obj_tp]:
-                    if self.scalar_feature in symbolic_info[self.obj_tp][inst] and\
+            if self.obj_tp in symbolic_info.keys():
+                for inst in symbolic_info[self.obj_tp].keys():
+                    if self.scalar_feature in symbolic_info[self.obj_tp][inst].keys() and\
                      (symbolic_info[self.obj_tp][inst][self.scalar_feature] < min_val or min_val == -1):
                         temp_obj = {inst: symbolic_info[self.obj_tp][inst]}
                         min_val = symbolic_info[self.obj_tp][inst][self.scalar_feature]
@@ -436,11 +436,11 @@ class WhereClause:
         elif self.where_tp == "spatial_rel":
             temp_dict1 = {}
             temp_dict2 = {}
-            if self.obj_tp in symbolic_info:
+            if self.obj_tp in symbolic_info.keys():
                 print("Current Symbolic Info (spatial_rel):\n", symbolic_info)
-                for inst1 in symbolic_info[self.obj_tp]:
-                    if self.obj_tp2 in symbolic_info:
-                        for inst2 in symbolic_info[self.obj_tp2]:
+                for inst1 in symbolic_info[self.obj_tp].keys():
+                    if self.obj_tp2 in symbolic_info.keys():
+                        for inst2 in symbolic_info[self.obj_tp2].keys():
                             # Query LLM for spatial rel
                             f = open('./RoboInfoGather/spatial_rel_pre_prompt.txt', 'r')
                             pre_prompt = f.read()
@@ -452,7 +452,7 @@ class WhereClause:
                             #print("\nSpatial Relation Locations:\n", loc1, "\n", loc2)
                             client = OpenAI(api_key=openai_api_key)
                             response = client.chat.completions.create(
-                                model="gpt-4",
+                                model="gpt-4o-mini-2024-07-18",
                                 messages=[{"role": "user", "content": f"{prompt}"}],
                                 stream=False,
                                 temperature=0.0
@@ -488,11 +488,11 @@ class WhereClause:
             
             # Combine
             ret_symb_info = {}
-            for obj_tp in symbolic_info:
+            for obj_tp in symbolic_info.keys():
                 if obj_tp in left_symb_info or obj_tp in right_symb_info:
                     temp_dict = {}
-                    if obj_tp in symbolic_info:
-                        for inst in symbolic_info[obj_tp]:
+                    if obj_tp in symbolic_info.keys():
+                        for inst in symbolic_info[obj_tp].keys():
                             inleft = False
                             inright = False
 
@@ -513,8 +513,8 @@ class WhereClause:
             # Compare to ret symb info
             # Remove version that are in true_ret_info
             keep_obj = {}
-            if self.obj_tp in symbolic_info:
-                for obj_dict in symbolic_info[self.obj_tp]:
+            if self.obj_tp in symbolic_info.keys():
+                for obj_dict in symbolic_info[self.obj_tp].keys():
                     in_true = False
 
                     if self.obj_tp in true_ret_info:

@@ -117,6 +117,10 @@ class Synthesizer:
         response = openai_generate_completion(
             client=self.client, model=self.model, messages=messages
         )
+        print("GPT Query Gen Response:\n", response)
+        response = response.lstrip(' ```python')
+        response = response.rstrip('```')
+        print("GPT Query Gen Response:\n", response)
         return SynthesisResult(response)
 
 

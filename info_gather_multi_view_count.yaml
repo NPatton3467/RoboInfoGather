@@ -101,7 +101,7 @@ bel_params:
   akld_stop: 5.0
   visualize: false
   explore_stop: "ENTROPY"
-  avg_ent_stop: 0.2
+  avg_ent_stop: 0.05
 
 planner_params:
   max_time: 120 #30

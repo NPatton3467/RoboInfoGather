@@ -26,7 +26,7 @@ def gen_prog_from_nl(nl_question):
         preamble_file_path="RoboInfoGather/synthesis/prompt_preamble.txt",
     )
 
-    query = f"Given the question `{nl_question}`, please provide a valid python program. Do not include any explanation, however you may include any necessary sub clauses, or queries."
+    query = f"Given the question `{nl_question}`, please provide a valid python program. Do not include any explanation, however you may include any necessary sub clauses, or queries. Please respond with only python executable code"
     result = synthesizer.generate(query)
     new_prog = result.get_program_object()
 
@@ -42,7 +42,7 @@ def get_nl_answer(query_exec_res, question, query_str):
 
     client = OpenAI(api_key=openai_api_key)
     response = client.chat.completions.create(
-        model="gpt-4",
+        model="gpt-4o-mini-2024-07-18",
         messages=[{"role": "user", "content": f"{prompt}"}],
         stream=False,
         temperature=0.0
@@ -52,12 +52,15 @@ def get_nl_answer(query_exec_res, question, query_str):
 
     return nl_answer
 
-def eval_similarity(nl_ans, text_answer):
-    prompt = f"Please evaluate the similarity of the utterance `{nl_ans}` and `{text_answer}` on a scale of 1 to 5. Please only respond with the numerical score."
+def eval_similarity(question, nl_ans, text_answer):
+    f = open('./RoboInfoGather/eval_similarity_pre_prompt.txt', 'r')
+    pre_prompt = f.read()
+    f.close()
+    prompt = pre_prompt + f"Given the examples please evaluate the following similarity.\nQuestion: {question}\nUtterance 1: {text_answer}\nUtterance 2: {nl_ans}\n\nPlease respond with only the numerical score\nScore: "
 
     client = OpenAI(api_key=openai_api_key)
     response = client.chat.completions.create(
-        model="gpt-4",
+        model="gpt-4o-mini-2024-07-18",
         messages=[{"role": "user", "content": f"{prompt}"}],
         stream=False,
         temperature=0.0

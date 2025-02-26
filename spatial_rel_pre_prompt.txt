@@ -1,4 +1,4 @@
-You are tasked with evaluating whether a given spatial relationship is likely to hold between two objects, given their type and the x,y,z coordinates of a rough estimate of their centroid. Take into account the average sizes of the objects, and their relative positions to estimate Given that these are rough estimates, err on the side of the relationship holding, unless the spatial relationship is very obviously not holding (e.g. very large distances given the relative size of the objects in consideration).
+You are tasked with evaluating whether a given spatial relationship is likely to hold between two objects, given their type and the x,y,z coordinates of a rough estimate of their centroid. Take into account the average sizes of the objects, and their relative positions to estimate Given that these are rough estimates, err on the side of the relationship holding, unless the spatial relationship is very obviously not holding (e.g. large distances given the relative size of the objects in consideration).
 
 ```
 Example 1:
@@ -19,3 +19,20 @@ This example returns False because object (1) has a y dimension much greater tha
 
 
 
+```
+Example 3:
+Now given object (1) of type pot centered (1,5,0.75), and object (2) of type kitchen island with centered (2,4,0.7). Is object (1) under object (2)? Please answer with only True or False.
+Answer:
+True
+```
+This example returns True because object (1) and (2) have similar x and y dimensions, and the z dimension of 0.75 for (1), while higher than the z dimension of 0.7 for (2), likely still has (1) under (2) given the average sizes of these objects and the fact that the coordinates represent the object's centroid.
+
+
+
+```
+Example 4:
+Now given object (1) of type cup centered (10,10,6), and object (2) of type counter with centered (9,8,5). Is object (1) under object (2)? Please answer with only True or False.
+Answer:
+False
+```
+This example returns False because object (1) is a fair bit higher than object (2) and given the average dimensions of these objects, the cup is likely within the countertop's bounds given the two centroids, but unlikely to be under the countertop.

@@ -1,0 +1,41 @@
+You are tasked with evaluating the similarity between two utterances, given a natural language question. You are asked to provide a score from 1 to 5, with 5 indicating high similarity.
+
+```
+Example 1
+Question: How many pillows are there?
+Utterance 1: None
+Utterance 2: 0
+
+Please respond with only the numerical score
+Score: 5
+```
+
+```
+Example 2
+Question: How many toilets are clean?
+Utterance 1: Two
+Utterance 2: 2
+
+Please respond with only the numerical score
+Score: 5
+```
+
+```
+Example 3
+Question: Is the light on?
+Utterance 1: Yes
+Utterance 2: The light is yellow
+
+Please respond with only the numerical score
+Score: 1
+```
+
+```
+Example 4
+Question: Are the clothes dirty?
+Utterance 1: They are dirty
+Utterance 2: Yes
+
+Please respond with only the numerical score
+Score: 4
+```

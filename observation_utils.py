@@ -17,6 +17,20 @@ import skimage.measure
 from matplotlib import pyplot as plt 
 import glob
 
+import openai
+from openai import OpenAI
+f = open('/robodata/user_data/npatt/explore-eqa/RoboInfoGather/openaikey.txt', 'r')
+openai_api_key = f.read().rstrip('\n')
+f.close()
+
+import base64
+from io import BytesIO
+
+# Function to encode the image
+def encode_image(image_path):
+    with open(image_path, "rb") as image_file:
+        return base64.b64encode(image_file.read()).decode("utf-8")
+
 def get_new_node(current_loc, dist, angle, belief):
     # In robot frame: robot direction is X-axis.
 
@@ -211,28 +225,159 @@ def obj_detection(vlm, cam_int_mat, dino_model, obj_tp, rgb_img, depth_img, conf
 
         real_world_coords.append(get_world_coords_from_depth(p_x, p_y, cur_depth, camera_pos, camera_pose, cam_int_mat))
         if feature != None:
-            x_min = int((box[0] - box[2]) * cropped_img.shape[1])
-            x_max = int((box[0] + box[2]) * cropped_img.shape[1])
-            y_min = int((box[1] - box[3]) * cropped_img.shape[0])
-            y_max = int((box[1] + box[3]) * cropped_img.shape[0])
+            x_min = min(cropped_img.shape[1], max(0, int((box[0] - box[2]) * cropped_img.shape[1])))
+            x_max = min(cropped_img.shape[1], max(0, int((box[0] + box[2]) * cropped_img.shape[1])))
+            y_min = min(cropped_img.shape[0], max(0, int((box[1] - box[3]) * cropped_img.shape[0])))
+            y_max = min(cropped_img.shape[0], max(0, int((box[1] + box[3]) * cropped_img.shape[0])))
 
             # Don't want to crop to practically 0 pixels
             print("Pre-Cropped Image Shape: ", cropped_img.shape)
             if (x_max - x_min) >= 5 and (y_max - y_min) >= 5:
                 cropped_img = cropped_img[y_min:y_max, x_min:x_max, :]
-            
+           
+            print("Post-Cropped Image Shape: ", cropped_img.shape)
+            print("x_max: ", x_max)
+            print("x_min: ", x_min)
+            print("y_max: ", y_max)
+            print("y_min: ", y_min)
             img = Image.fromarray(cropped_img).convert('RGB')
+            print("RGB Image Shape: ", img.size)
+
+
+            # Path to your image
+            image_path = "./RoboInfoGather/feature_pre_prompt_figs/fridge_material.png"
+
+            # Getting the Base64 string
+            fridge_image = encode_image(image_path)
+
+            message_1 = {
+                        "role": "user",
+                        "content": [
+                                {
+                                    "type": "text",
+                                    "text": "Example 1\nObject Type: Fridge\nFeature to evaluate: material\n\nValue: Stainless Steel"
+                                },
+                                {
+                                    "type": "image_url",
+                                    "image_url":{"url" : f"data:image/png;base64,{fridge_image}"}
+                                }
+                            ]
+                    }
+
+            # Path to your image
+            image_path = "./RoboInfoGather/feature_pre_prompt_figs/blanket_folded.png"
+
+            # Getting the Base64 string
+            blanket_image = encode_image(image_path)
+            message_2 = {
+                        "role": "user",
+                        "content": [
+                                {
+                                    "type": "text",
+                                    "text": "Example 2\nObject Type: Blanket\nFeature to evaluate: folded\n\nValue: Yes"
+                                },
+                                {
+                                    "type": "image_url",
+                                    "image_url":{"url" : f"data:image/png;base64,{blanket_image}"}
+                                }
+                            ]
+                    }
+            
+            # Path to your image
+            image_path = "./RoboInfoGather/feature_pre_prompt_figs/curtain_colour_white.png"
+
+            # Getting the Base64 string
+            curtain_image = encode_image(image_path)
+            message_3 = {
+                        "role": "user",
+                        "content": [
+                                {
+                                    "type": "text",
+                                    "text": "Example 3\nObject Type: Curtain\nFeature to evaluate: colour\n\nValue: White"
+                                },
+                                {
+                                    "type": "image_url",
+                                    "image_url":{"url" : f"data:image/png;base64,{curtain_image}"}
+                                }
+                            ]
+                    }
+            
+            # Path to your image
+            image_path = "./RoboInfoGather/feature_pre_prompt_figs/door_closed.png"
+
+            # Getting the Base64 string
+            door_image = encode_image(image_path)
+            message_4 = {
+                        "role": "user",
+                        "content": [
+                                {
+                                    "type": "text",
+                                    "text": "Example 4\nObject Type: Door\nFeature to evaluate: open\n\nValue: closed"
+                                },
+                                {
+                                    "type": "image_url",
+                                    "image_url":{"url" : f"data:image/png;base64,{door_image}"}
+                                }
+                            ]
+                    }
+            
+            # Path to your image
+            image_path = "./RoboInfoGather/feature_pre_prompt_figs/overhead_light_on.png"
+
+            # Getting the Base64 string
+            light_image = encode_image(image_path)
+            message_5 = {
+                        "role": "user",
+                        "content": [
+                                {
+                                    "type": "text",
+                                    "text": "Example 5\nObject Type: Light\nFeature to evaluate: turned on\n\nValue: on"
+                                },
+                                {
+                                    "type": "image_url",
+                                    "image_url":{"url" : f"data:image/png;base64,{light_image}"}
+                                }
+                            ]
+                    }
+            
+            buffered = BytesIO()
+            print("Image Size: ", img.size)
+            img.save(buffered, format="JPEG")
+            cur_img_encoded = base64.b64encode(buffered.getvalue()).decode('utf-8')
+            cur_message = {
+                        "role": "user",
+                        "content": [
+                                {
+                                    "type": "text",
+                                    "text": f"Now please evaluate the following feature given the above examples, the current object type, and image.\nObject Type: {obj_tp}\nFeature to evaluate: {feature}\n\nPlease responde with only the value below\nValue: "
+                                },
+                                {
+                                    "type": "image_url",
+                                    "image_url":{"url" : f"data:image/png;base64,{cur_img_encoded}"}
+                                }
+                            ]
+                    }
+            messages = [
+                message_1,
+                message_2,
+                message_3,
+                message_4,
+                message_5,
+                cur_message
+            ]
     
             # Query VLM
-            prompt = f"Given the image and object type: {obj_tp}, what is the value of the feature: {feature}? Please respond with only the value of the feature."
+            client = OpenAI(api_key=openai_api_key)
+            response = client.chat.completions.create(
+              model="gpt-4o-mini-2024-07-18",
+              messages=messages,
+              max_tokens=300,
+            )
+           
+            response = response.choices[0].message.content
 
-            response = vlm.generate(prompt, img)
-            
             print("Response: ", response)
             print("Cropped Image Shape: ", cropped_img.shape)
-            #plt.close('all')
-            #plt.imshow(cropped_img)
-            #plt.show()
 
             feature_ret_vals.append(response)
 

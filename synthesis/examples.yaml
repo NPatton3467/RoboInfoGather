@@ -56,3 +56,56 @@ Examples:
             ),
             map_tp="feature_enum",
         )
+  - name: Task 4
+    prompt: Is my blanket folded on the couch?
+    program: |
+        sub_where1 = WhereClause(
+            where_tp="spatial_rel",
+            obj_tp="Blanket",
+            obj_tp2="Couch",
+            spatial_relation="on",
+        )
+        sub_where2=WhereClause(where_tp="feature_enum", obj_tp="Blanket", enum_feature="fold status", enum_param="folded")
+        program = Map(
+            obj_tp="Blanket",
+            map_feature="fold status",
+            query=Query(
+                obj_tp="Blanket",
+                where_clause=WhereClause(
+                    where_tp="and",
+                    obj_tp="Blanket",
+                    sub_where_clause=[sub_where1, sub_where2],
+                ),
+            ),
+            map_tp="feature_enum",
+        )
+  - name: Task 5
+    prompt: Is my blanket folded on the couch in the bedroom?
+    program: |
+        sub_where1 = WhereClause(
+            where_tp="spatial_rel",
+            obj_tp="Blanket",
+            obj_tp2="Couch",
+            spatial_relation="on",
+        )
+        sub_where2 = WhereClause(
+            where_tp="spatial_rel",
+            obj_tp="Blanket",
+            obj_tp2="Bedroom",
+            spatial_relation="in",
+        )
+        sub_where3=WhereClause(where_tp="feature_enum", obj_tp="Blanket", enum_feature="fold_status", enum_param"folded")
+        sub_where12 = WhereClasue(where_tp="and", obj_tp="Blanket", sub_where_clause=[sub_where1, sub_where2])
+        program = Map(
+            obj_tp="Blanket",
+            map_feature="fold_status",
+            query=Query(
+                obj_tp="Blanket",
+                where_clause=WhereClause(
+                    where_tp="and",
+                    obj_tp="Blanket",
+                    sub_where_clause=[sub_where12, sub_where3],
+                ),
+            ),
+            map_tp="feature_enum",
+        )

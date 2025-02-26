@@ -27,7 +27,7 @@ def get_map_params(obj_tp, map_original_dim, map_original_resolution, vol_origin
 
     client = OpenAI(api_key=openai_api_key)
     response = client.chat.completions.create(
-        model="gpt-4",
+        model="gpt-4o-mini-2024-07-18",
         messages=[{"role": "user", "content": f"{prompt}"}],
         stream=False,
         temperature=0.0
