@@ -25,6 +25,8 @@ def eval_feature_equality(found_feature_val, comp, real_feature_val):
     )
 
     response = response.choices[0].message.content
+    print("Response:\n", response)
+    print("True: ", real_feature_val, " Test: ", found_feature_val)
 
     truth_val = False
     if (response.lower() == "equal" and comp == "==") or\
@@ -396,16 +398,14 @@ class WhereClause:
                                 temp_dict[inst] = temp_inst_dict
 
                     elif self.where_tp == "feature_enum":
-                        if self.enum_feature in symbolic_info[self.obj_tp][inst].keys() and\
-                            eval(f"'{symbolic_info[self.obj_tp][inst][self.enum_feature]}' {comp} '{self.enum_param}'"):
-                            
+                        if self.enum_feature in symbolic_info[self.obj_tp][inst].keys():
+                            if eval(f"'{symbolic_info[self.obj_tp][inst][self.enum_feature]}' {comp} '{self.enum_param}'"):
                                 temp_dict[inst] = symbolic_info[self.obj_tp][inst]
 
                     elif self.where_tp == "feature_scalar":
-                        if self.scalar_feature in symbolic_info[self.obj_tp][inst].keys() and\
-                          eval(f"{symbolic_info[self.obj_tp][inst][self.scalar_feature]} {comp} {self.scalar_param}"):
-                            
-                            temp_dict[inst] = symbolic_info[self.obj_tp][inst]
+                        if self.scalar_feature in symbolic_info[self.obj_tp][inst].keys():
+                            if eval(f"{symbolic_info[self.obj_tp][inst][self.scalar_feature]} {comp} {self.scalar_param}"):
+                                temp_dict[inst] = symbolic_info[self.obj_tp][inst]
 
             ret_symb_info[self.obj_tp] = temp_dict                
 

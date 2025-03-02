@@ -6,6 +6,7 @@ comp = "=="
 
 for i in range(10): # Test 10 times
     ret_val = eval_feature_equality(f_found, comp, f_real)
+    print("Returned Value:\n", ret_val)
     assert ret_val
 
 

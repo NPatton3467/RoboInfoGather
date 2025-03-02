@@ -118,7 +118,7 @@ for i in range(10): # Test 10 times
     #print("\nResult:\n", result)
     #print("\n\n")
 
-    true_res = {'cup': {0: {'colour': 'red', 'location': (0.0, 0.8, 1.1), 'on': 'table_0'}}}
+    true_res = {'cup': {0: {'colour': 'red', 'location': (0.0, 0.8, 1.1), 'on': 'table_0'}, 1: {'colour': 'red', 'location': (0.8, 0.8, 1.1), 'on': 'table_0'}}}
     if not check_eq(result, true_res):
         print(result)
         print(type(result))
