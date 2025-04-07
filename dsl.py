@@ -399,13 +399,23 @@ class WhereClause:
 
                     elif self.where_tp == "feature_enum":
                         if self.enum_feature in symbolic_info[self.obj_tp][inst].keys():
-                            if eval(f"'{symbolic_info[self.obj_tp][inst][self.enum_feature]}' {comp} '{self.enum_param}'"):
-                                temp_dict[inst] = symbolic_info[self.obj_tp][inst]
+                            a = symbolic_info[self.obj_tp][inst][self.enum_feature]
+                            print("A: ", a)
+                            try:
+                                if eval(f"'{a}' {comp} '{self.enum_param}'"):
+                                    temp_dict[inst] = symbolic_info[self.obj_tp][inst]
+                            except Exception as e:
+                                print("Failed to Execute Feature Enum Check")
 
                     elif self.where_tp == "feature_scalar":
                         if self.scalar_feature in symbolic_info[self.obj_tp][inst].keys():
-                            if eval(f"{symbolic_info[self.obj_tp][inst][self.scalar_feature]} {comp} {self.scalar_param}"):
-                                temp_dict[inst] = symbolic_info[self.obj_tp][inst]
+                            a = symbolic_info[self.obj_tp][inst][self.scalar_feature]
+                            print("A: ", a)
+                            try:
+                                if eval(f"{a} {comp} {self.scalar_param}"):
+                                    temp_dict[inst] = symbolic_info[self.obj_tp][inst]
+                            except Exception as e:
+                                print("Failed to Execute Feature Scalar Check")
 
             ret_symb_info[self.obj_tp] = temp_dict                
 

@@ -193,9 +193,7 @@ def obj_detection(vlm, cam_int_mat, dino_model, obj_tp, rgb_img, depth_img, conf
     img = Image.fromarray(img).convert('RGB')
     transform = T.Compose(
         [
-            T.RandomResize([800], max_size=1333),
             T.ToTensor(),
-            T.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225]),
         ]
     )
     img, _ = transform(img, None)

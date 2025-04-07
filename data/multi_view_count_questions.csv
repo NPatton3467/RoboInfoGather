@@ -1,11 +1,11 @@
 scene,floor,question,choices,question_formatted,answer,label
-00267-gQ3xxshDiCz,1,"How many mirrors do I have?","['Five','Eight','One','Three']","How many mirrors do I have? A) Five B) Eight C) One D) Three. Answer:",D,count
+00267-gQ3xxshDiCz,1,"How many mirrors do I have next to a closet?","['Five','Eight','One','Two']","How many mirrors do I have next to a closet? A) Five B) Eight C) One D) Two. Answer:",D,count
 00267-gQ3xxshDiCz,1,"How many lamps are on?","['Two','Seven','Six','Three']","How many lamps are on? A) Two B) Seven C) Six D) Three. Answer:",A,count
 00116-xp4FyfQ6Wr5,0,"How many pillows do I have?","['Ten','Fifteen','Twenty-seven','Thirty-four']","How many pillows do I have? A) Ten B) Fifteen C) Twenty-seven D) Thirty-four. Answer:",C,count
-00116-xp4FyfQ6Wr5,0,"How many ceramic cups do I have?","['One','Two','Three','Four']","How many ceramic cups do I have? A) One B) Two C) Three D) Four. Answer:",B,count
+00116-xp4FyfQ6Wr5,0,"How many ceramic cups do I have?","['Zero','Two','Three','Four']","How many ceramic cups do I have? A) One B) Two C) Three D) Four. Answer:",B,count
 00137-2tqbn5VLQoq,0,"How many tables are there with wooden tops?","['Seven','Twelve','Thirteen','Five']","How many tables are there with wooden tops? A) Seven B) Twelve C) Thirteen D) Five. Answer:",A,count
-00137-2tqbn5VLQoq,0,"How many wooden chairs are there?","['Three','Two','One','Five']","How many wooden chairs are there? A) Three B) Two C) One D) Five. Answer:",B,count
-00744-1S7LAXRdDqK,0,"How many windows have closed blinds?","['Five','Four','Three','Two']","How many windows have closed blinds? A) Five B) Four C) Three D) Two. Answer:",C,count
-00744-1S7LAXRdDqK,0,"How many of the doors are closed?","['Five','Four','Three','Two']","How many of the doors are closed? A) Five B) Four C) Three D) Two. Answer:",C,count
-00485-yX54kr5c5g9,0,"How many toilets do are there?","['Zero','One','Three','Two']","How many toilets are there? A) Zero B) One C) Three D) Two. Answer:",D,count
-00485-yX54kr5c5g9,0,"How many sinks are there?","['Three','Two','One','Zero']","How many sinks are there? A) Three B) Two C) One D) Zero. Answer:",A,count
+00137-2tqbn5VLQoq,1,"How many wooden chairs are there?","['Four','Two','One','Five']","How many wooden chairs are there? A) Three B) Two C) One D) Five. Answer:",B,count
+00744-1S7LAXRdDqK,0,"How many windows have closed blinds?","['Five','Seven','Three','Two']","How many windows have closed blinds? A) Five B) Four C) Three D) Two. Answer:",C,count
+00744-1S7LAXRdDqK,0,"How many of the doors are closed?","['Six','Four','Three','One']","How many of the doors are closed? A) Five B) Four C) Three D) Two. Answer:",C,count
+00485-yX54kr5c5g9,0,"How many toilets are there?","['Zero','One','Four','Two']","How many toilets are there? A) Zero B) One C) Three D) Two. Answer:",D,count
+00485-yX54kr5c5g9,0,"How many sinks are there?","['Three','Two','Five','Zero']","How many sinks are there? A) Three B) Two C) One D) Zero. Answer:",A,count
