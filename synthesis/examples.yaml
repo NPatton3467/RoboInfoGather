@@ -4,9 +4,9 @@ Examples:
     program: |
         program = Count(
             query=Query(
-                obj_tp="cups", where_clause=WhereClause(where_tp="true", obj_tp="cups")
+                obj_tp="Cup", where_clause=WhereClause(where_tp="true", obj_tp="Cup")
             ),
-            obj_tp="cups",
+            obj_tp="Cup",
         )
     
   - name: Task 2
@@ -17,7 +17,7 @@ Examples:
             map_feature="location",
             query=Query(
                 obj_tp="Cup",
-                where_clause=WhereClause(where_tp="max", obj_tp="cup", scalar_feature="height"),
+                where_clause=WhereClause(where_tp="max", obj_tp="Cup", scalar_feature="height"),
             ),
             map_tp="feature_enum",
         )

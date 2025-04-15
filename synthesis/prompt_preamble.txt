@@ -4,7 +4,7 @@ The programs are based on specific object definitions provided below:
 
 === QUERY ===
 A Query object represents a request for information on a specified set of objects. Instantiate a Query object with two arguments:
-1- A string representing the desired object type, e.g., "chair", "table", or "car".
+1- A string representing the desired object type, e.g., "chair", "table", or "car". Please do not pluralize object types.
 2- A WhereClause object that defines conditions for filtering the objects.
 Constructor Signature:
 `

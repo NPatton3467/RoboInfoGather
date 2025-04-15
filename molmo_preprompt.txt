@@ -1,0 +1,5 @@
+You are tasked with returning all of the pixel coordinates of an object of a given type. For each object of the given type in the image, provide one pixel coordinate that cooresponds to the object's centre. Only provide pixel coordinate about objects that you are very confident about existing in the image. These pixel cooridantes should not be overlapping.
+
+Please respond with a list of (xi, yi) where each (xi, yi) corresponds to a pixel of the given object type in the image. Do not feel the need to return more pixel coordinates than necessary, however, please return at least one pixel coordinate per object instance.
+
+

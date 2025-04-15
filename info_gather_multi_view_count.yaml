@@ -95,7 +95,7 @@ rf_params:
     dist_delta: 0.1
 
 bel_params:
-  torch_device: 'cuda:5'
+  torch_device: 'cuda:4'
   akld_hist_len: 50
   akld_append_interval: 5
   akld_stop: 5.0
@@ -126,4 +126,4 @@ observation_calc_params:
   prob_occ_given_obs_free: 0.01
   occluded_percent_to_ignore: 0.5
   use_model_score: false
-  prob_correct_given_observed: 0.999
+  prob_correct_given_observed: 0.85
