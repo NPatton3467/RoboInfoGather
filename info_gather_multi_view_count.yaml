@@ -123,7 +123,7 @@ planner_params:
 
 observation_calc_params:
   dne_occluded_prob: 0.35
-  prob_occ_given_obs_free: 0.01
+  prob_occ_given_obs_free: 0.1
   occluded_percent_to_ignore: 0.5
   use_model_score: false
-  prob_correct_given_observed: 0.85
+  prob_correct_given_observed: 0.95

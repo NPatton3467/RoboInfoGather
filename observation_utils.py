@@ -401,35 +401,74 @@ def obj_detection(vlm, cam_int_mat, dino_model, obj_tp, rgb_img, depth_img, conf
 
     return boxes, real_world_coords, feature_ret_vals, logits
 
-def instance_exists(img, obj_tp):
-    prompt = f"Is there an instance of `{obj_tp}` in this image? Pleaserespond with only `Yes` or `No`. Note: please consider the fact that most images will not have an instance of `{obj_tp}`, so only respond with `Yes` if you are very confident about the existence of `{obj_tp}`"
-    inputs = processor.process(
-        images=[img],
-        text= prompt
-    )
+def instance_exists(img, obj_tp, use_molmo=False):
+    prompt = f"Is it fairly likely that there is an instance of \'{obj_tp}\' in this image? Please respond with only \'Yes\' or \'No\'."
 
-    # move inputs to the correct device and make a batch of size 1
-    inputs = {k: v.to(molmo_model.device).unsqueeze(0) for k, v in inputs.items()}
+    if use_molmo:
+        inputs = processor.process(
+            images=[img],
+            text= prompt
+        )
 
-    # generate output; maximum 200 new tokens; stop generation when <|endoftext|> is generated
-    output = molmo_model.generate_from_batch(
-        inputs,
-        GenerationConfig(max_new_tokens=200, stop_strings="<|endoftext|>"),
-        tokenizer=processor.tokenizer
-    )
+        # move inputs to the correct device and make a batch of size 1
+        inputs = {k: v.to(molmo_model.device).unsqueeze(0) for k, v in inputs.items()}
 
-    # only get generated tokens; decode them to text
-    generated_tokens = output[0,inputs['input_ids'].size(1):]
-    generated_text = processor.tokenizer.decode(generated_tokens, skip_special_tokens=True)
+        # generate output; maximum 200 new tokens; stop generation when <|endoftext|> is generated
+        output = molmo_model.generate_from_batch(
+            inputs,
+            GenerationConfig(max_new_tokens=200, stop_strings="<|endoftext|>"),
+            tokenizer=processor.tokenizer
+        )
 
-    #print("Instance?: ", generated_text)
+        # only get generated tokens; decode them to text
+        generated_tokens = output[0,inputs['input_ids'].size(1):]
+        generated_text = processor.tokenizer.decode(generated_tokens, skip_special_tokens=True)
 
-    yes_idx = generated_text.lower().find('yes')
-    inst_e = (yes_idx >= 0 and yes_idx < 10)
+        #print("Instance?: ", generated_text)
 
-    #print("Return Value: ", inst_e)
+        yes_idx = generated_text.lower().find('yes')
+        inst_e = (yes_idx >= 0 and yes_idx < 10)
 
-    return inst_e
+        #print("Return Value: ", inst_e)
+
+        return inst_e
+    
+    else:
+        buffered = BytesIO()
+        print("Image Size: ", img.size)
+        img.save(buffered, format="JPEG")
+        cur_img_encoded = base64.b64encode(buffered.getvalue()).decode('utf-8')
+        cur_message = {
+                    "role": "user",
+                    "content": [
+                            {
+                                "type": "text",
+                                "text": prompt
+                            },
+                            {
+                                "type": "image_url",
+                                "image_url":{"url" : f"data:image/png;base64,{cur_img_encoded}"}
+                            }
+                        ]
+                }
+        messages = [
+            cur_message
+        ]
+
+        # Query VLM
+        client = OpenAI(api_key=openai_api_key)
+        response = client.chat.completions.create(
+          model="gpt-4o-mini-2024-07-18",
+          messages=messages,
+          max_tokens=300,
+        )
+       
+        response = response.choices[0].message.content
+        yes_idx = response.lower().find('yes')
+        inst_e = (yes_idx >= 0 and yes_idx < 15)
+
+        return inst_e
+
 
 def obj_detection_molmo(vlm, cam_int_mat, obj_tp, rgb_img, depth_img, config, camera_pos, camera_pose, feature=None):
     img = np.copy(rgb_img)
@@ -616,7 +655,7 @@ def obj_detection_molmo(vlm, cam_int_mat, obj_tp, rgb_img, depth_img, config, ca
                         "content": [
                                 {
                                     "type": "text",
-                                    "text": f"Now please evaluate the following feature given the above examples, the current object type, and image.\nObject Type: {obj_tp}\nFeature to evaluate: {feature}\n\nPlease responde with only the value below\nValue: "
+                                    "text": f"Now please evaluate the following feature given the above examples, the current object type, and image.\nObject Type: {obj_tp}\nFeature to evaluate: {feature}\n\nPlease do not return anything semantically equivalent to \'unknown\'.\n"
                                 },
                                 {
                                     "type": "image_url",
@@ -641,7 +680,7 @@ def obj_detection_molmo(vlm, cam_int_mat, obj_tp, rgb_img, depth_img, config, ca
               max_tokens=300,
             )
            
-            response = response.choices[0].message.content
+            response = response.choices[0].message.content.lstrip('Value: ')
 
             print("Response: ", response)
             print("Cropped Image Shape: ", cropped_img.shape)
@@ -713,4 +752,4 @@ def get_vox_preds(vlm, robot_yaw, camera_pos, camera_pose, belief, obj_tp, rgb_i
             if feature != None:
                 feature_vox_ret_vals.append([vxyz, feature_ret_vals[i]])
             
-    return voxel_preds, feature_vox_ret_vals, (len(pix_coords) > 0), pix_coords
+    return voxel_preds, feature_vox_ret_vals, (len(pix_coords) > 0), pix_coords, real_world_coords
