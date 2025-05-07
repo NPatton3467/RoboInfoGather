@@ -1,5 +1,5 @@
 """
-Run EQA in Habitat-Sim with RoboInfoGather exploration.
+Run EQA in OmniGibson with RoboInfoGather exploration.
 
 """
 
@@ -23,21 +23,11 @@ import quaternion
 import matplotlib.pyplot as plt
 from PIL import Image, ImageDraw, ImageFont
 from tqdm import tqdm
-import habitat_sim
-from habitat_sim.utils.common import quat_to_coeffs, quat_from_angle_axis
-from src.habitat import (
-    make_simple_cfg,
-    pos_normal_to_habitat,
-    pos_habitat_to_normal,
-    pose_habitat_to_normal,
-    pose_normal_to_tsdf,
-)
-from src.geom import get_cam_intr, get_scene_bnds
-from src.vlm import VLM
-from src.tsdf import TSDFPlanner
+from explore_eqa.src.geom import get_cam_intr, get_scene_bnds
+from explore_eqa.src.vlm import VLM
+from explore_eqa.src.tsdf import TSDFPlanner
 
 # RoboInfoGather Imports
-from groundingdino.util.inference import load_model
 from RoboInfoGather.program_utils import *
 from RoboInfoGather.pomdp import *
 from RoboInfoGather.pomdp_exec import *
@@ -45,6 +35,51 @@ from RoboInfoGather.MCTS_planner import *
 from RoboInfoGather.map_utils import *
 
 def main(cfg):
+    # Load the config
+    config_filename = os.path.join(f"/robodata/user_data/npatt/OmniGibson/RoboInfoGather/info_gather.yaml")
+    config = yaml.load(open(config_filename, "r"), Loader=yaml.FullLoader)
+
+    # check if we want to quick load or full load the scene
+    load_options = {
+        "Quick": "Only load the building assets (i.e.: the floors, walls, doors)",
+        "Full": "Load all interactive objects in the scene",
+    }
+    load_mode = choose_from_options(options=load_options, name="load mode", random_selection=False)
+    if load_mode == "Quick":
+        config["scene"]["load_object_categories"] = ["floors", "walls", "door"]
+
+    # Load the environment
+    env = og.Environment(configs=config)
+
+    # Allow user to move camera more easily
+    og.sim.enable_viewer_camera_teleoperation()
+
+    # Reset env before start? 
+    og.log.info("Resetting environment")
+    env.reset()
+
+
+    # Setup obstacle map
+    # Make default trav_map size
+    resolution = config['scene']['trav_map_resolution']
+    trav_map = get_trav_map(config['scene']['trav_map_path'], config['scene']['floor'], resolution, resolution)
+
+    trav_map = np.array(trav_map)
+    trav_map[:, 0] = 128
+    plt.imshow(trav_map)
+    plt.show()
+
+    # Change lidar mounting
+    _, rob_ori = env.robots[0].get_position_orientation()
+    print(env.robots[0]._sensors.keys())
+    cur_scan_pos, _ =env.robots[0]._sensors['robot0:scan_link:Lidar:0'].get_position_orientation()
+    cur_scan_pos[2] += 0.1
+    env.robots[0]._sensors['robot0:scan_link:Lidar:0'].set_position_orientation(cur_scan_pos, rob_ori)
+
+    # Change Camera Mounting
+    camera_pos, camera_ori = env.robots[0]._sensors['robot0:eyes:Camera:0'].get_position_orientation()
+    camera_pos[2] += 0.2
+    env.robots[0]._sensors['robot0:eyes:Camera:0'].set_position_orientation(camera_pos, camera_ori)
     camera_tilt = cfg.camera_tilt_deg * np.pi / 180
     img_height = cfg.img_height
     img_width = cfg.img_width

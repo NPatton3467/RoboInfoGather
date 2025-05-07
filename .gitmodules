@@ -1,0 +1,3 @@
+[submodule "explore-eqa"]
+	path = explore-eqa
+	url = git@github.com:Stanford-ILIAD/explore-eqa.git
