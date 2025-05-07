@@ -2,8 +2,8 @@ import json
 import numpy as np
 import cv2
 from RoboInfoGather.map_utils import *
-from groundingdino.util.inference import predict
-import groundingdino.datasets.transforms as T
+#from groundingdino.util.inference import predict
+#import groundingdino.datasets.transforms as T
 from RoboInfoGather.MCTS_planner import Loc
 
 from PIL import Image
