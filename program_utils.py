@@ -295,7 +295,7 @@ def gen_pomdp_from_query(query, pos, yaw, trav_map_og_dim, trav_map_og_res, vol_
         for obj in obj_feat_dict:
             if obj not in prev_pomdp.bel:
                 # Get map params based off of current params and obj_tp
-                map_params = get_map_params(obj, prev_pomdp.trav_map_original_dim, prev_pomdp.trav_map_original_resolution, vol_origin)
+                map_params = get_map_params(obj, prev_pomdp.trav_map_original_dim, prev_pomdp.trav_map_original_resolution, vol_origin, configs)
 
                 if gen_inform_priors == None:
                     prev_pomdp.bel[obj] = ObjTpBel(num, threshold, map_params, configs, obj_feat_dict[obj])

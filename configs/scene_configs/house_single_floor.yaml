@@ -1,0 +1,69 @@
+env:
+  initial_pos_z_offset: 0.1
+
+render:
+  viewer_width: 1280
+  viewer_height: 720
+
+scene:
+  type: InteractiveTraversableScene
+  scene_model: house_single_floor #Change this line and next three to modify scene
+  scene_file: /robodata/user_data/npatt/OmniGibson/omnigibson/data/og_dataset/scenes/house_single_floor/json/house_single_floor_best.json
+  trav_map_path: /robodata/user_data/npatt/OmniGibson/omnigibson/data/og_dataset/scenes/house_single_floor/layout/
+  floor: 0 # By default
+  trav_map_resolution: 0.01 # Change this to modify map resolution
+  trav_map_erosion: 0
+  trav_map_with_objects: false
+  build_graph: true
+  num_waypoints: 1
+  waypoint_resolution: 0.2
+  load_object_categories: null
+  not_load_object_categories: ["door"] # Can remove object categories here e.g. ["door"]
+  load_room_types: null
+  load_room_instances: null
+  seg_map_resolution: 0.1
+  scene_source: OG
+  include_robots: true
+
+robots:
+  - type: Turtlebot
+    name: rob
+    obs_modalities: [scan, rgb, depth, depth_linear, occupancy_grid] # , seg_instance, seg_semantic, bbox_3d]
+    scale: 1.0
+    self_collision: false
+    action_normalize: true
+    action_type: continuous
+    visible: false
+    controller_config:
+      base:
+        name: DifferentialDriveController
+    sensor_config:
+      VisionSensor:
+        enabled: True
+        sensor_kwargs:
+          image_height: 1000
+          image_width: 1000
+      
+task:
+  type: DummyTask
+  #robot_idn: 0
+  #floor: 0
+  #initial_pos: null
+  #initial_quat: null
+  #goal_pos: null
+  #goal_tolerance: 0.36    # turtlebot bodywidth
+  #goal_in_polar: false
+  #path_range: [1.0, 10.0]
+  #visualize_goal: true
+  #visualize_path: false
+  #n_vis_waypoints: 25
+  #reward_type: geodesic
+  #termination_config:
+  #  max_collisions: 500
+  #  max_steps: 500
+  #  fall_height: 0.03
+  #reward_config:
+  #  r_potential: 1.0
+  #  r_collision: 0.1
+  #  r_pointgoal: 10.0
+

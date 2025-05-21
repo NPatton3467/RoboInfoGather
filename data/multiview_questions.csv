@@ -1,0 +1,7 @@
+scene,floor,question,choices,question_formatted,answer,label
+Rs_int,0,"How many black chairs are near a table?","['One','Three','Six','Seven']","How many black chairs are near a table? A) One B) Three C) Six D) Seven. Answer:",B,mixed_count
+Rs_int,0,"What percent of black chairs are near a table?","['20%','50%','70%','100%']","What percent of black chairs are near a table? A) 20% B) 50% C) 70% D) 100%. Answer:",D,mixed_percent
+house_double_floor_lower,0,"How many couches are there?","['Zero','One','Three','Four']","How many couches are there? A) Zero B) One C) Three D) Four. Answer:",B,simple_count
+house_double_floor_lower,0,"How many blue couches are there?","['Zero','One','Three','Four']","How many blue couches are there? A) Zero B) One C) Three D) Four. Answer:",B,unary_count
+house_single_floor,0,"What percent of sinks are stainless steal?","['0%','25%','75%','100%']","What percent of sinks are stainless steal? A) 0% B) 25% C) 75% D) 100%. Answer:",B,unary_percent
+house_single_floor,0,"How many lamps are next to a bed?","['Three','Four','Five','Six']","How many lamps are next to a bed? A) Three B) Four C) Five D) Six. Answer:",A,binary_count

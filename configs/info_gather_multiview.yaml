@@ -1,0 +1,115 @@
+seed: 42
+exp_name: RIG_multi_view_exp
+output_parent_dir: /robodata/user_data/npatt/OmniGibson/RoboInfoGather/results
+question_data_path: /robodata/user_data/npatt/OmniGibson/RoboInfoGather/data/multiview_questions.csv
+init_pose_data_path: data/scene_init_poses.csv
+scene_config_path: /robodata/user_data/npatt/OmniGibson/RoboInfoGather/configs/scene_configs/
+save_obs: true
+save_freq: 10
+
+debug_path: /robodata/user_data/npatt/OmniGibson/RoboInfoGather/debug/
+
+rig_config_file_path: /robodata/user_data/npatt/OmniGibson/RoboInfoGather/configs/info_gather_multiview.yaml
+
+vlm:
+  device: cuda:6
+  model_id: prism-dinosiglip+7b
+
+# Camera, image
+camera_height: 1.5
+camera_tilt_deg: -30
+img_width: 640
+img_height: 480
+hfov: 120
+tsdf_grid_size: 0.1
+margin_w_ratio: 0.25
+margin_h_ratio: 0.6
+
+# Navigation
+init_clearance: 0.5
+max_step_room_size_ratio: 3
+black_pixel_ratio: 0.5
+min_random_init_steps: 2
+
+# Semantic map
+use_active: true
+use_lsv: true
+use_gsv: true
+gsv_T: 0.5
+gsv_F: 3
+planner:
+  dist_T: 10
+  unexplored_T: 0.2
+  unoccupied_T: 2.0
+  val_T: 0.5
+  val_dir_T: 0.5
+  max_val_check_frontier: 3
+  smooth_sigma: 5
+  eps: 1
+  min_dist_from_cur: 0.5
+  max_dist_from_cur: 3
+  frontier_spacing: 1.5
+  frontier_min_neighbors: 3
+  frontier_max_neighbors: 4
+  max_unexplored_check_frontier: 3
+  max_unoccupied_check_frontier: 1
+
+visual_prompt:
+  cluster_threshold: 1.0
+  num_prompt_points: 3
+  num_max_unoccupied: 300
+  min_points_for_clustering: 3
+  point_min_dist: 2
+  point_max_dist: 10
+  cam_offset: 0.6
+  min_num_prompt_points: 2
+  circle_radius: 18
+
+camera_params:
+  #min_angle : -0.2617993877991494
+  #max_angle : 0.2617993877991494
+    min_angle : -0.08726646259971647
+    max_angle : 0.08726646259971647
+    min_visual_distance : 0.5
+    max_visual_distance : 5
+
+rf_params:
+    map_granularity_not_used : 0.5
+    map_height : 2.5
+    angle_delta : 0.017453292519943295
+    dist_delta: 0.1
+
+bel_params:
+  torch_device: 'cuda:3'
+  akld_hist_len: 50
+  akld_append_interval: 5
+  akld_stop: 5.0
+  visualize: false
+  explore_stop: "ENTROPY"
+  avg_ent_stop: 0.2
+  res_to_use: 0.05
+
+planner_params:
+  max_time: 120 #30
+    #mcts_step_length: 1.0
+  mcts_step_length: 0.5
+  mcts_step_deg: 15
+  max_observations: 1
+  max_time_wo_replan: 500
+  way_point_loc_acc: 0.1
+  carrot_loc_acc: 0.075
+  way_point_ang_acc: 0.15
+  way_point_direction_angle: 0.15
+  teleport: true
+  max_rollout_depth: 100
+  epsilon: 0.1
+  max_num_samples: 100
+  sample_discretization: 100
+  angle_sample_discretization: 45
+
+observation_calc_params:
+  dne_occluded_prob: 0.35
+  prob_occ_given_obs_free: 0.01
+  occluded_percent_to_ignore: 0.5
+  use_model_score: false
+  prob_correct_given_observed: 0.999

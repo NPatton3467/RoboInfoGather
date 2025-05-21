@@ -1,6 +1,7 @@
 from RoboInfoGather.object_belief import *
 from RoboInfoGather.reward_func import *
 from RoboInfoGather.map_utils import *
+from RoboInfoGather.determinization_utils import *
 
 from matplotlib import pyplot as plt
 
@@ -31,7 +32,7 @@ class POMDP():
         self.rf_params = configs["rf_params"]
         for obj_tp, num, thresh, relevant_features, priors in obj_tp_list:
             # Get map params based off of current params and obj_tp
-            map_params = get_map_params(obj_tp, self.trav_map_original_dim, self.trav_map_original_resolution, self.vol_origin)
+            map_params = get_map_params(obj_tp, self.trav_map_original_dim, self.trav_map_original_resolution, self.vol_origin, configs)
 
             if priors == None:
                 self.bel[obj_tp] = ObjTpBel(num, thresh, map_params, self.configs, relevant_features)
@@ -75,7 +76,7 @@ class POMDP():
             # TODO: There has to be a better way to do this
             cur_obj_dict = {}
             instance_count = 0
-            xyzs = torch.argwhere(local_bel.p > local_bel.threshold)
+            xyzs = suppress_non_max(local_bel)
             for (xt, yt, zt) in xyzs:
                 # Check features (this is only enum features)
                 x = int(xt.detach().cpu())

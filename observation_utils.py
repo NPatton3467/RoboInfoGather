@@ -25,27 +25,19 @@ f.close()
 
 import base64
 from io import BytesIO
-
 from transformers import AutoModelForCausalLM, AutoProcessor, GenerationConfig
-# Set up MOLMO
-processor = AutoProcessor.from_pretrained(
-    #'allenai/Molmo-72B-0924',
-    #'allenai/MolmoE-1B-0924',
-    'allenai/Molmo-7B-D-0924',
-    trust_remote_code=True,
-    torch_dtype='auto',
-    device_map='auto'
-)
 
-molmo_model = AutoModelForCausalLM.from_pretrained(
-    #'allenai/Molmo-72B-0924',
-    #'allenai/MolmoE-1B-0924',
-    'allenai/Molmo-7B-D-0924',
-    trust_remote_code=True,
-    torch_dtype='auto',
-    device_map='auto'
-)
+# For structured GPT output
+from pydantic import BaseModel
+import instructor
+from typing import Literal
 
+class Feature(BaseModel):
+    feature_type: str
+    feature_val: str
+
+class Exists(BaseModel):
+    exists: Literal['Yes','No']
 
 # Function to encode the image
 def encode_image(image_path):
@@ -107,6 +99,9 @@ def get_world_coords_from_depth(x, y, depth, camera_pos, camera_pose, camera_int
         print("Apply Camera Pose to 2: ", np.matmul(camera_pose, c_coord2))
 
     world_coords = np.matmul(camera_pose, c_coord2)
+    print("World Coords 1: ", world_coords)
+    print("Robot Coords: ", camera_pose)
+    print("Depth: ", depth)
     return world_coords[0:3]
 
 def get_fov_from_depth_image(camera_pos, camera_pose, raw_depth_image, voxel_preds, resolution, z_res, dim, vol_origin, config, cam_int_mat):
@@ -383,61 +378,98 @@ def obj_detection(vlm, cam_int_mat, dino_model, obj_tp, rgb_img, depth_img, conf
                 message_5,
                 cur_message
             ]
-    
+
             # Query VLM
-            client = OpenAI(api_key=openai_api_key)
+            client = instructor.from_openai(OpenAI(api_key=openai_api_key), mode=instructor.Mode.MD_JSON)
             response = client.chat.completions.create(
               model="gpt-4o-mini-2024-07-18",
+              response_model=Feature,
               messages=messages,
               max_tokens=300,
             )
-           
-            response = response.choices[0].message.content
 
-            print("Response: ", response)
-            print("Cropped Image Shape: ", cropped_img.shape)
-
-            feature_ret_vals.append(response)
+            feature_ret_vals.append(response.feature_val)
 
     return boxes, real_world_coords, feature_ret_vals, logits
 
-def instance_exists(img, obj_tp):
-    prompt = f"Is there an instance of `{obj_tp}` in this image? Pleaserespond with only `Yes` or `No`. Note: please consider the fact that most images will not have an instance of `{obj_tp}`, so only respond with `Yes` if you are very confident about the existence of `{obj_tp}`"
-    inputs = processor.process(
-        images=[img],
-        text= prompt
-    )
+def instance_exists(molmo_tools, img, obj_tp, use_molmo=False):
+    prompt = f"Is it fairly likely that there is an instance of \'{obj_tp}\' in this image? Please respond with only \'Yes\' or \'No\'."
 
-    # move inputs to the correct device and make a batch of size 1
-    inputs = {k: v.to(molmo_model.device).unsqueeze(0) for k, v in inputs.items()}
+    if use_molmo:
+        molmo_model = molmo_tools['model']
+        processor = molmo_tools['processor']
+        inputs = processor.process(
+            images=[img],
+            text= prompt
+        )
 
-    # generate output; maximum 200 new tokens; stop generation when <|endoftext|> is generated
-    output = molmo_model.generate_from_batch(
-        inputs,
-        GenerationConfig(max_new_tokens=200, stop_strings="<|endoftext|>"),
-        tokenizer=processor.tokenizer
-    )
+        # move inputs to the correct device and make a batch of size 1
+        inputs = {k: v.to(molmo_model.device).unsqueeze(0) for k, v in inputs.items()}
 
-    # only get generated tokens; decode them to text
-    generated_tokens = output[0,inputs['input_ids'].size(1):]
-    generated_text = processor.tokenizer.decode(generated_tokens, skip_special_tokens=True)
+        # generate output; maximum 200 new tokens; stop generation when <|endoftext|> is generated
+        output = molmo_model.generate_from_batch(
+            inputs,
+            GenerationConfig(max_new_tokens=200, stop_strings="<|endoftext|>"),
+            tokenizer=processor.tokenizer
+        )
 
-    #print("Instance?: ", generated_text)
+        # only get generated tokens; decode them to text
+        generated_tokens = output[0,inputs['input_ids'].size(1):]
+        generated_text = processor.tokenizer.decode(generated_tokens, skip_special_tokens=True)
 
-    yes_idx = generated_text.lower().find('yes')
-    inst_e = (yes_idx >= 0 and yes_idx < 10)
+        #print("Instance?: ", generated_text)
 
-    #print("Return Value: ", inst_e)
+        yes_idx = generated_text.lower().find('yes')
+        inst_e = (yes_idx >= 0 and yes_idx < 10)
 
-    return inst_e
+        #print("Return Value: ", inst_e)
 
-def obj_detection_molmo(vlm, cam_int_mat, obj_tp, rgb_img, depth_img, config, camera_pos, camera_pose, feature=None):
+        return inst_e
+
+    else:
+        buffered = BytesIO()
+        print("Image Size: ", img.size)
+        img.save(buffered, format="JPEG")
+        cur_img_encoded = base64.b64encode(buffered.getvalue()).decode('utf-8')
+        cur_message = {
+                    "role": "user",
+                    "content": [
+                            {
+                                "type": "text",
+                                "text": prompt
+                            },
+                            {
+                                "type": "image_url",
+                                "image_url":{"url" : f"data:image/png;base64,{cur_img_encoded}"}
+                            }
+                        ]
+                }
+        messages = [
+            cur_message
+        ]
+        
+        # Query VLM
+        client = instructor.from_openai(OpenAI(api_key=openai_api_key), mode=instructor.Mode.MD_JSON)
+        response = client.chat.completions.create(
+          model="gpt-4o-mini-2024-07-18",
+          response_model=Exists,
+          messages=messages,
+          max_tokens=300,
+        )
+
+        inst_e = (response.exists == 'Yes')
+
+        return inst_e
+
+def obj_detection_molmo(vlm, molmo_tools, cam_int_mat, obj_tp, rgb_img, depth_img, config, camera_pos, camera_pose, feature=None):
     img = np.copy(rgb_img)
     #Image should be torch tensor
     img = Image.fromarray(img).convert('RGB')
 
     coords = []
-    if instance_exists(img, obj_tp):
+    if instance_exists(molmo_tools, img, obj_tp):
+        molmo_model = molmo_tools['model']
+        processor = molmo_tools['processor']
         # Process with MOLMO
         with open('./RoboInfoGather/molmo_preprompt.txt', 'r') as f:
             pre_prompt = f.read()
@@ -616,7 +648,7 @@ def obj_detection_molmo(vlm, cam_int_mat, obj_tp, rgb_img, depth_img, config, ca
                         "content": [
                                 {
                                     "type": "text",
-                                    "text": f"Now please evaluate the following feature given the above examples, the current object type, and image.\nObject Type: {obj_tp}\nFeature to evaluate: {feature}\n\nPlease responde with only the value below\nValue: "
+                                    "text": f"Now please evaluate the following feature given the above examples, the current object type, and image.\nObject Type: {obj_tp}\nFeature to evaluate: {feature}\n\nPlease do not return anything semantically equivalent to \'unknown\'.\n"
                                 },
                                 {
                                     "type": "image_url",
@@ -632,21 +664,17 @@ def obj_detection_molmo(vlm, cam_int_mat, obj_tp, rgb_img, depth_img, config, ca
                 message_5,
                 cur_message
             ]
-    
+            
             # Query VLM
-            client = OpenAI(api_key=openai_api_key)
+            client = instructor.from_openai(OpenAI(api_key=openai_api_key), mode=instructor.Mode.MD_JSON)
             response = client.chat.completions.create(
               model="gpt-4o-mini-2024-07-18",
+              response_model=Feature,
               messages=messages,
               max_tokens=300,
             )
-           
-            response = response.choices[0].message.content
 
-            print("Response: ", response)
-            print("Cropped Image Shape: ", cropped_img.shape)
-
-            feature_ret_vals.append(response)
+            feature_ret_vals.append(response.feature_val)
 
     #Logits?
     logits = []
@@ -655,15 +683,15 @@ def obj_detection_molmo(vlm, cam_int_mat, obj_tp, rgb_img, depth_img, config, ca
 
     return coords, real_world_coords, feature_ret_vals, logits
 
-def get_vox_preds(vlm, robot_yaw, camera_pos, camera_pose, belief, obj_tp, rgb_image, depth_image, dino_model, config, obstacle_map, camera_intrinsic_mat, feature=None, iteration=0):
+def get_vox_preds(vlm, molmo_tools, robot_yaw, camera_pos, camera_pose, belief, obj_tp, rgb_image, depth_image, dino_model, config, obstacle_map, camera_intrinsic_mat, feature=None, iteration=0):
     """
-    Function to get predicted value of existence at each voxel (for an object type) 
+    Function to get predicted value of existence at each voxel (for an object type)
     give observation
 
     :param:
 
 
-    :returns: np.array with same size as belief, where voxels within observation are updated based on 
+    :returns: np.array with same size as belief, where voxels within observation are updated based on
     predicted value of object existence.
     """
 
@@ -671,7 +699,7 @@ def get_vox_preds(vlm, robot_yaw, camera_pos, camera_pose, belief, obj_tp, rgb_i
 
     voxel_preds = torch.ones(belief.p.shape).to(torch.device(config['bel_params']['torch_device']))
     voxel_preds *= -1
-    
+
     # Make 0 in all visible voxels
     resolution = belief.map_params['res']
     dim = belief.map_params['dim']
@@ -682,18 +710,18 @@ def get_vox_preds(vlm, robot_yaw, camera_pos, camera_pose, belief, obj_tp, rgb_i
 
     print("Starting FOV")
     voxel_preds = get_fov_from_depth_image(camera_pos, camera_pose, depth_image, voxel_preds, resolution, belief.map_params['z_res'], dim, vol_origin, config, camera_intrinsic_mat)
-   
+
     # Get object detection
     #boxes, real_world_coords, feature_ret_vals, logits = obj_detection(vlm, camera_intrinsic_mat, dino_model, obj_tp, rgb_image, depth_image, config, camera_pos, camera_pose, feature=feature)
-    pix_coords, real_world_coords, feature_ret_vals, logits = obj_detection_molmo(vlm, camera_intrinsic_mat, obj_tp, rgb_image, depth_image, config, camera_pos, camera_pose, feature=feature)
-    
+    pix_coords, real_world_coords, feature_ret_vals, logits = obj_detection_molmo(vlm, molmo_tools, camera_intrinsic_mat, obj_tp, rgb_image, depth_image, config, camera_pos, camera_pose, feature=feature)
+
     print("First BOXES")
     feature_vox_ret_vals = []
     for i in range(len(real_world_coords)):
         x, y, z = real_world_coords[i]
         print("REAL WORLD: ", x,y,z)
-        score = logits[i] 
-        
+        score = logits[i]
+
         map_resolution = belief.map_params['res']
         map_dim = belief.map_params['dim']
         vol_origin = belief.map_params['vol_origin']
@@ -708,9 +736,9 @@ def get_vox_preds(vlm, robot_yaw, camera_pos, camera_pose, belief, obj_tp, rgb_i
             if config['observation_calc_params']['use_model_score']:
                 voxel_preds[vxyz[0], vxyz[1], vxyz[2]] = score
             else:
-                voxel_preds[vxyz[0], vxyz[1], vxyz[2]] = config['observation_calc_params']['prob_correct_given_observed'] 
+                voxel_preds[vxyz[0], vxyz[1], vxyz[2]] = config['observation_calc_params']['prob_correct_given_observed']
 
             if feature != None:
                 feature_vox_ret_vals.append([vxyz, feature_ret_vals[i]])
-            
-    return voxel_preds, feature_vox_ret_vals, (len(pix_coords) > 0), pix_coords
+
+    return voxel_preds, feature_vox_ret_vals, (len(pix_coords) > 0), pix_coords, real_world_coords

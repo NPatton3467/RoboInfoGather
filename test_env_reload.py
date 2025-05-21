@@ -203,7 +203,6 @@ def main(cfg):
         init_pts, _ = env.robots[0].get_position_orientation()
         init_pts = np.array(init_pts.cpu().detach())
         pitch, roll, init_angle = env.robots[0].get_rpy()
-        print("INIT ANGLE: ", init_angle)
         init_angle = init_angle.cpu().detach()
         logging.info(f"\n========\nIndex: {question_ind} Scene: {scene} Floor: {floor}")
 
@@ -225,7 +224,7 @@ def main(cfg):
                     [floor_height - 0.2, floor_height + 3.5]
                 ])
         scene_size = (map_size * resolution) ** 2
-        num_step = int(math.sqrt(scene_size) * cfg.max_step_room_size_ratio)*3 #TODO: REMOVE 3x
+        num_step = 1
         logging.info(
             f"Scene size: {scene_size} Floor height: {floor_height} Steps: {num_step}"
         )
@@ -356,10 +355,6 @@ def main(cfg):
                 margin_w=int(cfg.margin_w_ratio * img_width),
             )
 
-            # Save volume for debuging
-            t_vol = tsdf_planner._tsdf_vol_cpu
-            np.save(debug_f_path+f"tsdf_volume_{cnt_step}.npy", t_vol)
-
             #################
             # Update Belief #
             #################
@@ -387,8 +382,6 @@ def main(cfg):
                 pomdp.bel[obj_tp].update(vox_preds)
                 print("Camera Pose: ", cam_pose_normal)
                 print("PTS: ", pts)
-
-                np.save(debug_f_path+f"bel_{obj_tp}_{cnt_step}.npy", np.array(pomdp.bel[obj_tp].p.detach().cpu()))
 
                 # Do the same for each feature
                 print("Starting Feature Update in run_RIG")
@@ -671,7 +664,9 @@ def main(cfg):
         ) as f:
             pickle.dump(results_all, f)
 
+        print("About to clear og")
         og.clear()
+        print("Done clearing og")
 
 
     # Save all data again
