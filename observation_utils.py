@@ -73,15 +73,6 @@ def get_world_coords_from_depth(x, y, depth, camera_pos, camera_pose, camera_int
     camera_coords_x = (x-cx)*camera_coords_z/fx
     camera_coords_y = (y-cy)*camera_coords_z/fy
 
-    debug = False
-    if debug:
-        print("CX: ", cx)
-        print("CY: ", cy)
-        print("FX: ", fx)
-        print("FY: ", fy)
-        print("X: ", x)
-        print("Y: ", y)
-
     # Translate 3D coordinates to global frame
     c_coord = np.array([camera_coords_x, camera_coords_y, camera_coords_z, 1])
 
@@ -89,19 +80,11 @@ def get_world_coords_from_depth(x, y, depth, camera_pos, camera_pose, camera_int
     c_coord2 = np.array([c_coord[2], -c_coord[0], -c_coord[1], 1])
 
     # Rotate to yaw 
-    if debug:
-        print("Camera Pose: ", camera_pose)
-        print("Camera Position: ", camera_pos)
-        print("Coordinates in Camera Frame: ", c_coord)
-        print("Coordinates in Camera Frame2: ", c_coord2)
-
-        print("Apply Camera Pose to 1: ", np.matmul(camera_pose, c_coord))
-        print("Apply Camera Pose to 2: ", np.matmul(camera_pose, c_coord2))
 
     world_coords = np.matmul(camera_pose, c_coord2)
-    print("World Coords 1: ", world_coords)
-    print("Robot Coords: ", camera_pose)
-    print("Depth: ", depth)
+    #print("World Coords 1: ", world_coords)
+    #print("Robot Coords: ", camera_pose)
+    #print("Depth: ", depth)
     return world_coords[0:3]
 
 def get_fov_from_depth_image(camera_pos, camera_pose, raw_depth_image, voxel_preds, resolution, z_res, dim, vol_origin, config, cam_int_mat):
@@ -202,264 +185,245 @@ def get_fov(current_location, config, camera_params, obstacle_map, belief, debug
 
     return fov, obstacles
 
-def obj_detection(vlm, cam_int_mat, dino_model, obj_tp, rgb_img, depth_img, config, camera_pos, camera_pose, feature=None):
-    img = np.copy(rgb_img)
-    #Image should be torch tensor
-    img = Image.fromarray(img).convert('RGB')
-    transform = T.Compose(
-        [
-            T.ToTensor(),
-        ]
-    )
-    img, _ = transform(img, None)
 
-
-    TEXT_PROMPT = f'{obj_tp}'
-    BOX_THRESHOLD = 0.6
-    TEXT_THRESHOLD = 0.25
-
-    with torch.no_grad():
-        boxes, logits, _ = predict(
-            model=dino_model,
-            image=img,
-            caption=TEXT_PROMPT,
-            box_threshold=BOX_THRESHOLD,
-            text_threshold=TEXT_THRESHOLD
-        )
-
-    feature_ret_vals = [] 
-    real_world_coords = []
-    for box in boxes:
-        cropped_img = np.copy(rgb_img)
-        p_x = int(box[0] * cropped_img.shape[1])
-        p_y = int(box[1] * cropped_img.shape[0])
-
-        cur_depth = depth_img[p_y, p_x]
-
-        real_world_coords.append(get_world_coords_from_depth(p_x, p_y, cur_depth, camera_pos, camera_pose, cam_int_mat))
-        if feature != None:
-            x_min = min(cropped_img.shape[1], max(0, int((box[0] - box[2]) * cropped_img.shape[1])))
-            x_max = min(cropped_img.shape[1], max(0, int((box[0] + box[2]) * cropped_img.shape[1])))
-            y_min = min(cropped_img.shape[0], max(0, int((box[1] - box[3]) * cropped_img.shape[0])))
-            y_max = min(cropped_img.shape[0], max(0, int((box[1] + box[3]) * cropped_img.shape[0])))
-
-            # Don't want to crop to practically 0 pixels
-            print("Pre-Cropped Image Shape: ", cropped_img.shape)
-            if (x_max - x_min) >= 5 and (y_max - y_min) >= 5:
-                cropped_img = cropped_img[y_min:y_max, x_min:x_max, :]
-           
-            print("Post-Cropped Image Shape: ", cropped_img.shape)
-            print("x_max: ", x_max)
-            print("x_min: ", x_min)
-            print("y_max: ", y_max)
-            print("y_min: ", y_min)
-            img = Image.fromarray(cropped_img).convert('RGB')
-            print("RGB Image Shape: ", img.size)
-
-
-            # Path to your image
-            image_path = "./RoboInfoGather/feature_pre_prompt_figs/fridge_material.png"
-
-            # Getting the Base64 string
-            fridge_image = encode_image(image_path)
-
-            message_1 = {
-                        "role": "user",
-                        "content": [
-                                {
-                                    "type": "text",
-                                    "text": "Example 1\nObject Type: Fridge\nFeature to evaluate: material\n\nValue: Stainless Steel"
-                                },
-                                {
-                                    "type": "image_url",
-                                    "image_url":{"url" : f"data:image/png;base64,{fridge_image}"}
-                                }
-                            ]
-                    }
-
-            # Path to your image
-            image_path = "./RoboInfoGather/feature_pre_prompt_figs/blanket_folded.png"
-
-            # Getting the Base64 string
-            blanket_image = encode_image(image_path)
-            message_2 = {
-                        "role": "user",
-                        "content": [
-                                {
-                                    "type": "text",
-                                    "text": "Example 2\nObject Type: Blanket\nFeature to evaluate: folded\n\nValue: Yes"
-                                },
-                                {
-                                    "type": "image_url",
-                                    "image_url":{"url" : f"data:image/png;base64,{blanket_image}"}
-                                }
-                            ]
-                    }
-            
-            # Path to your image
-            image_path = "./RoboInfoGather/feature_pre_prompt_figs/curtain_colour_white.png"
-
-            # Getting the Base64 string
-            curtain_image = encode_image(image_path)
-            message_3 = {
-                        "role": "user",
-                        "content": [
-                                {
-                                    "type": "text",
-                                    "text": "Example 3\nObject Type: Curtain\nFeature to evaluate: colour\n\nValue: White"
-                                },
-                                {
-                                    "type": "image_url",
-                                    "image_url":{"url" : f"data:image/png;base64,{curtain_image}"}
-                                }
-                            ]
-                    }
-            
-            # Path to your image
-            image_path = "./RoboInfoGather/feature_pre_prompt_figs/door_closed.png"
-
-            # Getting the Base64 string
-            door_image = encode_image(image_path)
-            message_4 = {
-                        "role": "user",
-                        "content": [
-                                {
-                                    "type": "text",
-                                    "text": "Example 4\nObject Type: Door\nFeature to evaluate: open\n\nValue: closed"
-                                },
-                                {
-                                    "type": "image_url",
-                                    "image_url":{"url" : f"data:image/png;base64,{door_image}"}
-                                }
-                            ]
-                    }
-            
-            # Path to your image
-            image_path = "./RoboInfoGather/feature_pre_prompt_figs/overhead_light_on.png"
-
-            # Getting the Base64 string
-            light_image = encode_image(image_path)
-            message_5 = {
-                        "role": "user",
-                        "content": [
-                                {
-                                    "type": "text",
-                                    "text": "Example 5\nObject Type: Light\nFeature to evaluate: turned on\n\nValue: on"
-                                },
-                                {
-                                    "type": "image_url",
-                                    "image_url":{"url" : f"data:image/png;base64,{light_image}"}
-                                }
-                            ]
-                    }
-            
-            buffered = BytesIO()
-            print("Image Size: ", img.size)
-            img.save(buffered, format="JPEG")
-            cur_img_encoded = base64.b64encode(buffered.getvalue()).decode('utf-8')
-            cur_message = {
-                        "role": "user",
-                        "content": [
-                                {
-                                    "type": "text",
-                                    "text": f"Now please evaluate the following feature given the above examples, the current object type, and image.\nObject Type: {obj_tp}\nFeature to evaluate: {feature}\n\nPlease responde with only the value below\nValue: "
-                                },
-                                {
-                                    "type": "image_url",
-                                    "image_url":{"url" : f"data:image/png;base64,{cur_img_encoded}"}
-                                }
-                            ]
-                    }
-            messages = [
-                message_1,
-                message_2,
-                message_3,
-                message_4,
-                message_5,
-                cur_message
-            ]
-
-            # Query VLM
-            client = instructor.from_openai(OpenAI(api_key=openai_api_key), mode=instructor.Mode.MD_JSON)
-            response = client.chat.completions.create(
-              model="gpt-4o-mini-2024-07-18",
-              response_model=Feature,
-              messages=messages,
-              max_tokens=300,
-            )
-
-            feature_ret_vals.append(response.feature_val)
-
-    return boxes, real_world_coords, feature_ret_vals, logits
-
-def instance_exists(molmo_tools, img, obj_tp, use_molmo=False):
+def instance_exists(molmo_tools, img, obj_tp):
     prompt = f"Is it fairly likely that there is an instance of \'{obj_tp}\' in this image? Please respond with only \'Yes\' or \'No\'."
 
-    if use_molmo:
-        molmo_model = molmo_tools['model']
-        processor = molmo_tools['processor']
-        inputs = processor.process(
-            images=[img],
-            text= prompt
-        )
+    buffered = BytesIO()
+    print("Image Size: ", img.size)
+    img.save(buffered, format="JPEG")
+    cur_img_encoded = base64.b64encode(buffered.getvalue()).decode('utf-8')
+    cur_message = {
+                "role": "user",
+                "content": [
+                        {
+                            "type": "text",
+                            "text": prompt
+                        },
+                        {
+                            "type": "image_url",
+                            "image_url":{"url" : f"data:image/png;base64,{cur_img_encoded}"}
+                        }
+                    ]
+            }
+    messages = [
+        cur_message
+    ]
+    
+    # Query VLM
+    client = instructor.from_openai(OpenAI(api_key=openai_api_key), mode=instructor.Mode.MD_JSON)
+    response = client.chat.completions.create(
+      model="gpt-4o-mini-2024-07-18",
+      response_model=Exists,
+      messages=messages,
+      max_tokens=300,
+    )
 
-        # move inputs to the correct device and make a batch of size 1
-        inputs = {k: v.to(molmo_model.device).unsqueeze(0) for k, v in inputs.items()}
+    inst_e = (response.exists == 'Yes')
 
-        # generate output; maximum 200 new tokens; stop generation when <|endoftext|> is generated
-        output = molmo_model.generate_from_batch(
-            inputs,
-            GenerationConfig(max_new_tokens=200, stop_strings="<|endoftext|>"),
-            tokenizer=processor.tokenizer
-        )
+    return inst_e
 
-        # only get generated tokens; decode them to text
-        generated_tokens = output[0,inputs['input_ids'].size(1):]
-        generated_text = processor.tokenizer.decode(generated_tokens, skip_special_tokens=True)
+def get_pixel_coords_molmo(molmo_tools, obj_tp, img):
+    coords = []
+    molmo_model = molmo_tools['model']
+    processor = molmo_tools['processor']
+    # Process with MOLMO
+    with open('./RoboInfoGather/molmo_preprompt.txt', 'r') as f:
+        pre_prompt = f.read()
 
-        #print("Instance?: ", generated_text)
+    prompt = pre_prompt + f"Now, please provide the pixel coordinates corresponding to the centroid of any {obj_tp}(s) that are in this image.\n"
+    inputs = processor.process(
+        images=[img],
+        text= prompt
+    )
 
-        yes_idx = generated_text.lower().find('yes')
-        inst_e = (yes_idx >= 0 and yes_idx < 10)
+    # move inputs to the correct device and make a batch of size 1
+    inputs = {k: v.to(molmo_model.device).unsqueeze(0) for k, v in inputs.items()}
 
-        #print("Return Value: ", inst_e)
+    # generate output; maximum 200 new tokens; stop generation when <|endoftext|> is generated
+    output = molmo_model.generate_from_batch(
+        inputs,
+        GenerationConfig(max_new_tokens=200, stop_strings="<|endoftext|>"),
+        tokenizer=processor.tokenizer
+    )
 
-        return inst_e
+    # only get generated tokens; decode them to text
+    generated_tokens = output[0,inputs['input_ids'].size(1):]
+    generated_text = processor.tokenizer.decode(generated_tokens, skip_special_tokens=True)
 
-    else:
-        buffered = BytesIO()
-        print("Image Size: ", img.size)
-        img.save(buffered, format="JPEG")
-        cur_img_encoded = base64.b64encode(buffered.getvalue()).decode('utf-8')
-        cur_message = {
-                    "role": "user",
-                    "content": [
-                            {
-                                "type": "text",
-                                "text": prompt
-                            },
-                            {
-                                "type": "image_url",
-                                "image_url":{"url" : f"data:image/png;base64,{cur_img_encoded}"}
-                            }
-                        ]
-                }
-        messages = [
-            cur_message
-        ]
-        
-        # Query VLM
-        client = instructor.from_openai(OpenAI(api_key=openai_api_key), mode=instructor.Mode.MD_JSON)
-        response = client.chat.completions.create(
-          model="gpt-4o-mini-2024-07-18",
-          response_model=Exists,
-          messages=messages,
-          max_tokens=300,
-        )
+    # Get pixel coords
+    temp_gen_text = generated_text
+    while temp_gen_text.find('(') >= 0:
+        idx = temp_gen_text.find('(') + 1
+        temp_gen_text = temp_gen_text[idx:]
+       
+        try:
+            xy = temp_gen_text.split(',')
+            x = float(xy[0])
+            y = xy[1]
+            y_end_idx = y.find(')')
+            y = float(y[:y_end_idx].lstrip(' '))
+            
+            if x >= 0 and x < 100 and y >= 0 and y < 100:
+                coords.append((x,y))
+        except Exception as e:
+            print(f"Failed to create pixel {xy} from output")
 
-        inst_e = (response.exists == 'Yes')
+    return coords
 
-        return inst_e
+def get_feature_vals(cropped_img, coord, obj_tp, feature):
+    x_min = min(cropped_img.shape[1]-1, max(0, int((coord[0] - 100) * (cropped_img.shape[1]-1) / 100)))
+    x_max = min(cropped_img.shape[1]-1, max(0, int((coord[0] + 100) * (cropped_img.shape[1]-1) / 100)))
+    y_min = min(cropped_img.shape[0]-1, max(0, int((coord[1] - 100) * (cropped_img.shape[0]-1) / 100)))
+    y_max = min(cropped_img.shape[0]-1, max(0, int((coord[1] + 100) * (cropped_img.shape[0]-1) / 100)))
+
+    # Don't want to crop to practically 0 pixels
+    print("Pre-Cropped Image Shape: ", cropped_img.shape)
+    if (x_max - x_min) >= 5 and (y_max - y_min) >= 5:
+        cropped_img = cropped_img[y_min:y_max, x_min:x_max, :]
+   
+    print("Post-Cropped Image Shape: ", cropped_img.shape)
+    print("x_max: ", x_max)
+    print("x_min: ", x_min)
+    print("y_max: ", y_max)
+    print("y_min: ", y_min)
+    img = Image.fromarray(cropped_img).convert('RGB')
+    print("RGB Image Shape: ", img.size)
+
+
+    # Path to your image
+    image_path = "./RoboInfoGather/feature_pre_prompt_figs/fridge_material.png"
+
+    # Getting the Base64 string
+    fridge_image = encode_image(image_path)
+
+    message_1 = {
+                "role": "user",
+                "content": [
+                        {
+                            "type": "text",
+                            "text": "Example 1\nObject Type: Fridge\nFeature to evaluate: material\n\nValue: Stainless Steel"
+                        },
+                        {
+                            "type": "image_url",
+                            "image_url":{"url" : f"data:image/png;base64,{fridge_image}"}
+                        }
+                    ]
+            }
+
+    # Path to your image
+    image_path = "./RoboInfoGather/feature_pre_prompt_figs/blanket_folded.png"
+
+    # Getting the Base64 string
+    blanket_image = encode_image(image_path)
+    message_2 = {
+                "role": "user",
+                "content": [
+                        {
+                            "type": "text",
+                            "text": "Example 2\nObject Type: Blanket\nFeature to evaluate: folded\n\nValue: Yes"
+                        },
+                        {
+                            "type": "image_url",
+                            "image_url":{"url" : f"data:image/png;base64,{blanket_image}"}
+                        }
+                    ]
+            }
+    
+    # Path to your image
+    image_path = "./RoboInfoGather/feature_pre_prompt_figs/curtain_colour_white.png"
+
+    # Getting the Base64 string
+    curtain_image = encode_image(image_path)
+    message_3 = {
+                "role": "user",
+                "content": [
+                        {
+                            "type": "text",
+                            "text": "Example 3\nObject Type: Curtain\nFeature to evaluate: colour\n\nValue: White"
+                        },
+                        {
+                            "type": "image_url",
+                            "image_url":{"url" : f"data:image/png;base64,{curtain_image}"}
+                        }
+                    ]
+            }
+    
+    # Path to your image
+    image_path = "./RoboInfoGather/feature_pre_prompt_figs/door_closed.png"
+
+    # Getting the Base64 string
+    door_image = encode_image(image_path)
+    message_4 = {
+                "role": "user",
+                "content": [
+                        {
+                            "type": "text",
+                            "text": "Example 4\nObject Type: Door\nFeature to evaluate: open\n\nValue: closed"
+                        },
+                        {
+                            "type": "image_url",
+                            "image_url":{"url" : f"data:image/png;base64,{door_image}"}
+                        }
+                    ]
+            }
+    
+    # Path to your image
+    image_path = "./RoboInfoGather/feature_pre_prompt_figs/overhead_light_on.png"
+
+    # Getting the Base64 string
+    light_image = encode_image(image_path)
+    message_5 = {
+                "role": "user",
+                "content": [
+                        {
+                            "type": "text",
+                            "text": "Example 5\nObject Type: Light\nFeature to evaluate: turned on\n\nValue: on"
+                        },
+                        {
+                            "type": "image_url",
+                            "image_url":{"url" : f"data:image/png;base64,{light_image}"}
+                        }
+                    ]
+            }
+    
+    buffered = BytesIO()
+    print("Image Size: ", img.size)
+    img.save(buffered, format="JPEG")
+    cur_img_encoded = base64.b64encode(buffered.getvalue()).decode('utf-8')
+    cur_message = {
+                "role": "user",
+                "content": [
+                        {
+                            "type": "text",
+                            "text": f"Now please evaluate the following feature given the above examples, the current object type, and image.\nObject Type: {obj_tp}\nFeature to evaluate: {feature}\n\nPlease do not return anything semantically equivalent to \'unknown\'.\n"
+                        },
+                        {
+                            "type": "image_url",
+                            "image_url":{"url" : f"data:image/png;base64,{cur_img_encoded}"}
+                        }
+                    ]
+            }
+    messages = [
+        message_1,
+        message_2,
+        message_3,
+        message_4,
+        message_5,
+        cur_message
+    ]
+    
+    # Query VLM
+    client = instructor.from_openai(OpenAI(api_key=openai_api_key), mode=instructor.Mode.MD_JSON)
+    response = client.chat.completions.create(
+      model="gpt-4o-mini-2024-07-18",
+      response_model=Feature,
+      messages=messages,
+      max_tokens=300,
+    )
+
+    return response.feature_val
+
 
 def obj_detection_molmo(vlm, molmo_tools, cam_int_mat, obj_tp, rgb_img, depth_img, config, camera_pos, camera_pose, feature=None):
     img = np.copy(rgb_img)
@@ -468,50 +432,7 @@ def obj_detection_molmo(vlm, molmo_tools, cam_int_mat, obj_tp, rgb_img, depth_im
 
     coords = []
     if instance_exists(molmo_tools, img, obj_tp):
-        molmo_model = molmo_tools['model']
-        processor = molmo_tools['processor']
-        # Process with MOLMO
-        with open('./RoboInfoGather/molmo_preprompt.txt', 'r') as f:
-            pre_prompt = f.read()
-
-        prompt = pre_prompt + f"Now, please provide the pixel coordinates corresponding to the centroid of any {obj_tp}(s) that are in this image.\n"
-        inputs = processor.process(
-            images=[img],
-            text= prompt
-        )
-
-        # move inputs to the correct device and make a batch of size 1
-        inputs = {k: v.to(molmo_model.device).unsqueeze(0) for k, v in inputs.items()}
-
-        # generate output; maximum 200 new tokens; stop generation when <|endoftext|> is generated
-        output = molmo_model.generate_from_batch(
-            inputs,
-            GenerationConfig(max_new_tokens=200, stop_strings="<|endoftext|>"),
-            tokenizer=processor.tokenizer
-        )
-
-        # only get generated tokens; decode them to text
-        generated_tokens = output[0,inputs['input_ids'].size(1):]
-        generated_text = processor.tokenizer.decode(generated_tokens, skip_special_tokens=True)
-
-        # Get pixel coords
-        temp_gen_text = generated_text
-        while temp_gen_text.find('(') >= 0:
-            idx = temp_gen_text.find('(') + 1
-            temp_gen_text = temp_gen_text[idx:]
-           
-            try:
-                xy = temp_gen_text.split(',')
-                x = float(xy[0])
-                y = xy[1]
-                y_end_idx = y.find(')')
-                y = float(y[:y_end_idx].lstrip(' '))
-                
-                if x >= 0 and x < 100 and y >= 0 and y < 100:
-                    coords.append((x,y))
-            except Exception as e:
-                print(f"Failed to create pixel {xy} from output")
-
+        coords = get_pixel_coords_molmo(molmo_tools, obj_tp, img)
 
     feature_ret_vals = [] 
     real_world_coords = []
@@ -524,157 +445,7 @@ def obj_detection_molmo(vlm, molmo_tools, cam_int_mat, obj_tp, rgb_img, depth_im
 
         real_world_coords.append(get_world_coords_from_depth(p_x, p_y, cur_depth, camera_pos, camera_pose, cam_int_mat))
         if feature != None:
-            x_min = min(cropped_img.shape[1]-1, max(0, int((coord[0] - 100) * (cropped_img.shape[1]-1) / 100)))
-            x_max = min(cropped_img.shape[1]-1, max(0, int((coord[0] + 100) * (cropped_img.shape[1]-1) / 100)))
-            y_min = min(cropped_img.shape[0]-1, max(0, int((coord[1] - 100) * (cropped_img.shape[0]-1) / 100)))
-            y_max = min(cropped_img.shape[0]-1, max(0, int((coord[1] + 100) * (cropped_img.shape[0]-1) / 100)))
-
-            # Don't want to crop to practically 0 pixels
-            print("Pre-Cropped Image Shape: ", cropped_img.shape)
-            if (x_max - x_min) >= 5 and (y_max - y_min) >= 5:
-                cropped_img = cropped_img[y_min:y_max, x_min:x_max, :]
-           
-            print("Post-Cropped Image Shape: ", cropped_img.shape)
-            print("x_max: ", x_max)
-            print("x_min: ", x_min)
-            print("y_max: ", y_max)
-            print("y_min: ", y_min)
-            img = Image.fromarray(cropped_img).convert('RGB')
-            print("RGB Image Shape: ", img.size)
-
-
-            # Path to your image
-            image_path = "./RoboInfoGather/feature_pre_prompt_figs/fridge_material.png"
-
-            # Getting the Base64 string
-            fridge_image = encode_image(image_path)
-
-            message_1 = {
-                        "role": "user",
-                        "content": [
-                                {
-                                    "type": "text",
-                                    "text": "Example 1\nObject Type: Fridge\nFeature to evaluate: material\n\nValue: Stainless Steel"
-                                },
-                                {
-                                    "type": "image_url",
-                                    "image_url":{"url" : f"data:image/png;base64,{fridge_image}"}
-                                }
-                            ]
-                    }
-
-            # Path to your image
-            image_path = "./RoboInfoGather/feature_pre_prompt_figs/blanket_folded.png"
-
-            # Getting the Base64 string
-            blanket_image = encode_image(image_path)
-            message_2 = {
-                        "role": "user",
-                        "content": [
-                                {
-                                    "type": "text",
-                                    "text": "Example 2\nObject Type: Blanket\nFeature to evaluate: folded\n\nValue: Yes"
-                                },
-                                {
-                                    "type": "image_url",
-                                    "image_url":{"url" : f"data:image/png;base64,{blanket_image}"}
-                                }
-                            ]
-                    }
-            
-            # Path to your image
-            image_path = "./RoboInfoGather/feature_pre_prompt_figs/curtain_colour_white.png"
-
-            # Getting the Base64 string
-            curtain_image = encode_image(image_path)
-            message_3 = {
-                        "role": "user",
-                        "content": [
-                                {
-                                    "type": "text",
-                                    "text": "Example 3\nObject Type: Curtain\nFeature to evaluate: colour\n\nValue: White"
-                                },
-                                {
-                                    "type": "image_url",
-                                    "image_url":{"url" : f"data:image/png;base64,{curtain_image}"}
-                                }
-                            ]
-                    }
-            
-            # Path to your image
-            image_path = "./RoboInfoGather/feature_pre_prompt_figs/door_closed.png"
-
-            # Getting the Base64 string
-            door_image = encode_image(image_path)
-            message_4 = {
-                        "role": "user",
-                        "content": [
-                                {
-                                    "type": "text",
-                                    "text": "Example 4\nObject Type: Door\nFeature to evaluate: open\n\nValue: closed"
-                                },
-                                {
-                                    "type": "image_url",
-                                    "image_url":{"url" : f"data:image/png;base64,{door_image}"}
-                                }
-                            ]
-                    }
-            
-            # Path to your image
-            image_path = "./RoboInfoGather/feature_pre_prompt_figs/overhead_light_on.png"
-
-            # Getting the Base64 string
-            light_image = encode_image(image_path)
-            message_5 = {
-                        "role": "user",
-                        "content": [
-                                {
-                                    "type": "text",
-                                    "text": "Example 5\nObject Type: Light\nFeature to evaluate: turned on\n\nValue: on"
-                                },
-                                {
-                                    "type": "image_url",
-                                    "image_url":{"url" : f"data:image/png;base64,{light_image}"}
-                                }
-                            ]
-                    }
-            
-            buffered = BytesIO()
-            print("Image Size: ", img.size)
-            img.save(buffered, format="JPEG")
-            cur_img_encoded = base64.b64encode(buffered.getvalue()).decode('utf-8')
-            cur_message = {
-                        "role": "user",
-                        "content": [
-                                {
-                                    "type": "text",
-                                    "text": f"Now please evaluate the following feature given the above examples, the current object type, and image.\nObject Type: {obj_tp}\nFeature to evaluate: {feature}\n\nPlease do not return anything semantically equivalent to \'unknown\'.\n"
-                                },
-                                {
-                                    "type": "image_url",
-                                    "image_url":{"url" : f"data:image/png;base64,{cur_img_encoded}"}
-                                }
-                            ]
-                    }
-            messages = [
-                message_1,
-                message_2,
-                message_3,
-                message_4,
-                message_5,
-                cur_message
-            ]
-            
-            # Query VLM
-            client = instructor.from_openai(OpenAI(api_key=openai_api_key), mode=instructor.Mode.MD_JSON)
-            response = client.chat.completions.create(
-              model="gpt-4o-mini-2024-07-18",
-              response_model=Feature,
-              messages=messages,
-              max_tokens=300,
-            )
-
-            feature_ret_vals.append(response.feature_val)
+            feature_ret_vals.append(get_feature_vals(cropped_img, coord, obj_tp, feature))
 
     #Logits?
     logits = []
@@ -712,7 +483,6 @@ def get_vox_preds(vlm, molmo_tools, robot_yaw, camera_pos, camera_pose, belief, 
     voxel_preds = get_fov_from_depth_image(camera_pos, camera_pose, depth_image, voxel_preds, resolution, belief.map_params['z_res'], dim, vol_origin, config, camera_intrinsic_mat)
 
     # Get object detection
-    #boxes, real_world_coords, feature_ret_vals, logits = obj_detection(vlm, camera_intrinsic_mat, dino_model, obj_tp, rgb_image, depth_image, config, camera_pos, camera_pose, feature=feature)
     pix_coords, real_world_coords, feature_ret_vals, logits = obj_detection_molmo(vlm, molmo_tools, camera_intrinsic_mat, obj_tp, rgb_image, depth_image, config, camera_pos, camera_pose, feature=feature)
 
     print("First BOXES")

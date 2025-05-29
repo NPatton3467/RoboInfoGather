@@ -11,18 +11,6 @@ class RewardFunc():
         self.rf_params = rf_params
 
     def eval(self, belief, obstacle_map, root, node):
-        # If not taking an observation action return 0
-        if (node.inbound_act != Action.OBS ):# and
-            #node.inbound_act != Action.L_N and
-            #node.inbound_act != Action.L_NE and
-            #node.inbound_act != Action.L_E and
-            #node.inbound_act != Action.L_SE and
-            #node.inbound_act != Action.L_S and
-            #node.inbound_act != Action.L_SW and
-            #node.inbound_act != Action.L_W and
-            #node.inbound_act != Action.L_NW):
-           return 0
-
         # Get grid spaces within robots FOV
         local_config = {'rf_params': {'angle_delta' : self.rf_params['angle_delta']}}
         #locs = get_fov(node.loc, local_config, self.camera_params, obstacle_map, belief, debug_print=False)
@@ -60,14 +48,5 @@ class RewardFunc():
         print('Num Checked: ', len(checked_xy))
         print('Actual Num Checked: ', num_checked)
         print('Num in FOV: ', len(locs))
-
-        # Add distance to get observation
-        # root_x = root.loc.x
-        # root_y = root.loc.y
-
-        # node_x = node.loc.x
-        # node_y = node.loc.y
-
-        # dist = np.sqrt((node_x-root_x)**2 + (node_y-root_y)**2)
 
         return reward

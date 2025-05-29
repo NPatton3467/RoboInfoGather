@@ -13,6 +13,7 @@ rig_config_file_path: /robodata/user_data/npatt/OmniGibson/RoboInfoGather/config
 
 vlm:
   device: cuda:6
+  hf_token: #TOKEN
   model_id: prism-dinosiglip+7b
 
 # Camera, image

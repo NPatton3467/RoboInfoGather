@@ -283,56 +283,5 @@ def gen_pomdp_from_query(query, pos, yaw, trav_map_og_dim, trav_map_og_res, vol_
             new_pomdp = POMDP(query, robot_init_loc, obj_tp_list, trav_map_og_dim, trav_map_og_res, vol_origin, configs)
 
         return new_pomdp
-
-    else: # Build off of old pomdp
-        threshold = query.threshold
-        num = query.limit
-
-        obj_feat_dict = get_objects_and_features(query)
-
-        # Make list and unify with old
-        obj_tp_list = []
-        for obj in obj_feat_dict:
-            if obj not in prev_pomdp.bel:
-                # Get map params based off of current params and obj_tp
-                map_params = get_map_params(obj, prev_pomdp.trav_map_original_dim, prev_pomdp.trav_map_original_resolution, vol_origin, configs)
-
-                if gen_inform_priors == None:
-                    prev_pomdp.bel[obj] = ObjTpBel(num, threshold, map_params, configs, obj_feat_dict[obj])
-                else:
-                    prev_pomdp.bel[obj] = gen_inform_priors
-
-                prev_pomdp.reward_funcs[obj] = RewardFunc(map_params, prev_pomdp.camera_params, prev_pomdp.rf_params)
-
-                if prev_pomdp.configs['bel_params']['visualize']:
-                    # Add figures
-                    fig = plt.figure()
-                    ax = fig.add_subplot(1,1,1)
-                    plt.ion()
-                    plt.show()
-                    prev_pomdp.figures[obj] = (fig, ax)
-
-            else:
-                # Check for features
-                for feature in obj_feat_dict[obj]:
-                    if feature not in prev_pomdp.bel[obj].feature_bels:
-                        # Make a new feature belief
-                        feature_dict = {}
-                        p = np.copy(prev_pomdp.bel[obj].p)
-                        if feature['tp'] == "feature_scalar":
-                            feature_dict = {'bel': np.copy(p), "tp" : feature['tp'], "vals": np.zeros_like(p)}
-                        elif feature['tp'] == "feature_enum":
-                            # For features, we want to keep around names like colour = red
-                            x_dim, y_dim, z_dim = p.shape
-                            val_z = np.array(['' for _ in range(z_dim)], dtype=object)
-                            val_y = np.array([val_z for _ in range(y_dim)], dtype=object)
-                            val = np.array([val_y for _ in range(x_dim)], dtype=object)
-
-                            # Should have same shape
-                            assert val.shape == p.shape
-
-                            feature_dict = {'bel': np.copy(p), "tp" : feature['tp'], "vals": val}
-
-                        prev_pomdp.bel[obj].feature_bels[feature['name']] = feature_dict
-
-        return prev_pomdp
+    else:
+        assert False # Don't worry about this case now

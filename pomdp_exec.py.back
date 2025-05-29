@@ -1,0 +1,36 @@
+import os
+import pickle
+
+import yaml
+
+#import omnigibson as og
+#from omnigibson.utils.ui_utils import choose_from_options
+
+from collections import OrderedDict
+from matplotlib import pyplot as plt
+import numpy as np
+import cv2
+from PIL import Image
+import queue
+
+#from omnigibson.object_states.pose import Pose
+
+from RoboInfoGather.MCTS_planner import *
+from RoboInfoGather.observation_utils import *
+from RoboInfoGather.map_utils import *
+from RoboInfoGather.motion_planning import *
+
+from dataclasses import dataclass, field
+from typing import Any
+
+from scipy.spatial.transform import Rotation
+
+def eval_reached_way_point(goal_pos, goal_yaw, pos, yaw, config):
+    dist = np.sqrt((goal_pos[0] - pos[0])**2 + (goal_pos[1] - pos[1])**2)
+    if dist < config['planner_params']['way_point_loc_acc']:
+        if np.abs(yaw - goal_yaw) < config['planner_params']['way_point_ang_acc'] or\
+                abs(goal_yaw- yaw) > (2*np.pi - config['planner_params']['way_point_direction_angle']):
+
+                return True
+
+    return False

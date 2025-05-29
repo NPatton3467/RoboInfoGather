@@ -2,6 +2,7 @@ from RoboInfoGather.object_belief import *
 from RoboInfoGather.reward_func import *
 from RoboInfoGather.map_utils import *
 from RoboInfoGather.determinization_utils import *
+from RoboInfoGather.observation_utils import *
 
 from matplotlib import pyplot as plt
 
@@ -206,3 +207,81 @@ class POMDP():
         plt.pause(0.001)
 
         print(self.figures)
+
+    def update(
+            self,
+            vlm,
+            molmo_tools,
+            angle,
+            camera_pos,
+            cam_pose_normal,
+            rgb, 
+            depth,
+            dino_model,
+            RIG_config,
+            tsdf_planner,
+            cam_intr,
+            cnt_step,
+            pts,
+            debug_f_path
+        ):
+
+        found_obj = False
+        ret_pix_coords = []
+        ret_real_coords = []
+        for obj_tp in self.bel.keys():
+            print(self.bel[obj_tp])
+            # Get predictions for all voxels based on observations
+            vox_preds, _, found_obj, pix_coords, real_world_coords = get_vox_preds(
+                    vlm,
+                    molmo_tools,
+                    angle,
+                    camera_pos,
+                    cam_pose_normal,
+                    self.bel[obj_tp],
+                    obj_tp,
+                    rgb,
+                    depth,
+                    dino_model,
+                    RIG_config,
+                    tsdf_planner,
+                    cam_intr,
+                    iteration=cnt_step
+                )
+
+            self.bel[obj_tp].update(vox_preds)
+            print("Camera Pose: ", cam_pose_normal)
+            print("PTS: ", pts)
+
+            ret_pix_coords += pix_coords
+            ret_real_coords += real_world_coords
+
+            np.save(debug_f_path+f"bel_{obj_tp}_{cnt_step}.npy", np.array(self.bel[obj_tp].p.detach().cpu()))
+
+            # Do the same for each feature
+            print("Starting Feature Update in run_RIG")
+            for feature in self.bel[obj_tp].feature_bels.keys():
+                # Get predictions for all voxels based on observations
+                print(self.bel[obj_tp])
+                vox_preds, feature_ret_vals, found_obj, pix_coords, real_world_coords = get_vox_preds(
+                        vlm,
+                        molmo_tools,
+                        angle,
+                        camera_pos,
+                        cam_pose_normal,
+                        self.bel[obj_tp],
+                        obj_tp,
+                        rgb,
+                        depth,
+                        dino_model,
+                        RIG_config,
+                        tsdf_planner,
+                        cam_intr,
+                        feature=feature,
+                        iteration=cnt_step
+                    )
+
+                self.bel[obj_tp].update(vox_preds, feature=feature, feature_ret_vals=feature_ret_vals)
+
+        print("Done Feature Update in run_RIG")
+        return ret_real_coords, ret_pix_coords, found_obj
