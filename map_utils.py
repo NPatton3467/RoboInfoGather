@@ -65,6 +65,7 @@ def get_map_params(obj_tp, map_original_dim, map_original_resolution, vol_origin
 
     return {'res' : map_resolution, 'og_res' : map_original_resolution, 'dim' : map_dim, 'og_dim' : map_original_dim, 'z_res' : z_resolution, 'vol_origin': vol_origin, 'obj_map_res': obj_map_resolution, 'obj_z_res': obj_z_resolution}
 
+# Convert world coordinates to other map coordinates (e.g. belief)
 def world_to_map(xyz, vol_origin, map_resolution, z_resolution, map_dim):
     pts = xyz - vol_origin
     coords = np.round(pts / map_resolution).astype(int)
@@ -72,6 +73,7 @@ def world_to_map(xyz, vol_origin, map_resolution, z_resolution, map_dim):
     coords = np.clip(coords, 0, map_dim - 1)
     return coords
 
+# Convert map coordinates (e.g. belief) to world coordinates
 def map_to_world(xyz, vol_origin, map_resolution, z_resolution):
     vol_origin = vol_origin.astype(np.float32)
     vox_coords = xyz.astype(np.float32)

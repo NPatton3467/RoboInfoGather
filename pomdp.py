@@ -74,10 +74,13 @@ class POMDP():
 
             local_bel_shape = local_bel.p.shape
 
-            # TODO: There has to be a better way to do this
             cur_obj_dict = {}
             instance_count = 0
+
+            # Get xyz coordinates of potential instances of obj_tp
             xyzs = suppress_non_max(local_bel)
+
+            # Evaluate their features and add them to return dict
             for (xt, yt, zt) in xyzs:
                 # Check features (this is only enum features)
                 x = int(xt.detach().cpu())
@@ -108,6 +111,8 @@ class POMDP():
         return symbolic_info
         
 
+    # Compute the Average KL Divergence (AKLD) over belief history
+    # This can be used as a possible stopping criteria
     def compute_akld(self, iterations):
         if iteration % self.configs['bel_params']['akld_append_interval'] == 0:
             self.prior_beliefs.append(copy.deepcopy(self.bel))
@@ -133,6 +138,8 @@ class POMDP():
 
         return akld
 
+    # Compute the average entropy of the beliefs
+    # This can be used as a potential stopping criteria
     def compute_average_entropy(self):
         avg_entropy = 0.0
 
@@ -148,6 +155,7 @@ class POMDP():
 
         return -1 * avg_entropy
 
+    # Check whether the beliefs contain enough information to stop
     def enough_info(self, iteration):
         symbolic_info = self.make_symbolic()
         
@@ -166,7 +174,8 @@ class POMDP():
             if num_found < self.bel[obj_tp].num or self.bel[obj_tp].num == -1:
                 found_all_obj = False
                 break
-        
+       
+        # Depending on stopping criteria, check if beliefs have converged sufficiently
         if self.explore_stop == "AKLD":
             akld = self.compute_akld(iterations)
             # Check akld and num found
@@ -208,6 +217,7 @@ class POMDP():
 
         print(self.figures)
 
+    # Update all the beliefs based on current observations
     def update(
             self,
             vlm,
@@ -217,7 +227,6 @@ class POMDP():
             cam_pose_normal,
             rgb, 
             depth,
-            dino_model,
             RIG_config,
             tsdf_planner,
             cam_intr,
@@ -229,6 +238,8 @@ class POMDP():
         found_obj = False
         ret_pix_coords = []
         ret_real_coords = []
+
+        # Iterate through each belief and update
         for obj_tp in self.bel.keys():
             print(self.bel[obj_tp])
             # Get predictions for all voxels based on observations
@@ -242,7 +253,6 @@ class POMDP():
                     obj_tp,
                     rgb,
                     depth,
-                    dino_model,
                     RIG_config,
                     tsdf_planner,
                     cam_intr,
@@ -273,7 +283,6 @@ class POMDP():
                         obj_tp,
                         rgb,
                         depth,
-                        dino_model,
                         RIG_config,
                         tsdf_planner,
                         cam_intr,

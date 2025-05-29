@@ -19,6 +19,7 @@ from scipy.spatial.transform import Rotation
 
 from collections import OrderedDict
 
+# Complile the information produced into the result to be saved to a file
 def get_result(
         prog,
         symbolic_info,
@@ -81,6 +82,8 @@ def get_result(
 
     return result
 
+# Call synthesis module to generate the program to be executed
+# After program is generated, instantiate the POMDP from the program
 def gen_program(cfg, tsdf_bnds, tsdf_planner, question, pos, angle, RIG_config, max_attempts=10000):
     attempts = 0
     prog = None
@@ -95,10 +98,15 @@ def gen_program(cfg, tsdf_bnds, tsdf_planner, question, pos, angle, RIG_config, 
     print("VOX SIZE: ", tsdf_planner._voxel_size)
 
     #This format: np.array([-way_point.loc.y, pts[1], way_point.loc.x])
+    # Wrapped in try block since pomdp generation can fail through assertions
+    # if the output from the LLM synthesizer is incorrect
     while attempts < 10000:
         attempts += 1
         try:
+            # Call synthesizer
             prog = gen_prog_from_nl(question)
+
+            # Generate the pomdp from the program
             if type(prog) is Prog:
                 pomdp = gen_pomdp_from_query(
                         query=prog.expressions[0],
@@ -126,6 +134,7 @@ def gen_program(cfg, tsdf_bnds, tsdf_planner, question, pos, angle, RIG_config, 
 
     return prog, pomdp
 
+# Take a step in the environment and recieve updated state (rgb, depth)
 def env_update(cnt_step, pts, pitch, roll, angle, env):
     # Save step info and set current pose
     logging.info(f"Current pts: {pts}")
@@ -157,7 +166,7 @@ def env_update(cnt_step, pts, pitch, roll, angle, env):
     print("pts_normal: ", pts_normal)
     print("\n\n")
 
-    # Get observation at current pose - skip black image, meaning robot is outside the floor
+    # Get observation at current pose
     action = OrderedDict([('rob', np.array([0 , 0]))])
     state, _, _, _, info = env.step(action) # Take Empty step to get observations
     rgb = np.array(state['rob']['rob:eyes:Camera:0']['rgb'].detach().cpu())
@@ -165,6 +174,8 @@ def env_update(cnt_step, pts, pitch, roll, angle, env):
 
     return pts, angle, cam_pose, cam_pose_tsdf, cam_pose_normal, camera_pos, rgb, depth
 
+# Get frontier points from TSDF volume and see if there are any in the image
+# to check if they are good next waypoints with VLM
 def setup_frontier_pts_in_image(
         pts_normal,
         cam_pose_tsdf,
@@ -199,6 +210,7 @@ def setup_frontier_pts_in_image(
 
     return prompt_points_pix
 
+# Draw the points on the current image for the VLM to rank 
 def draw_image_pts(rgb_im, prompt_points_pix, cfg, episode_data_dir, cnt_step):
     draw_letters = ["A", "B", "C", "D"]  # always four
     fnt = ImageFont.truetype(
@@ -233,6 +245,7 @@ def draw_image_pts(rgb_im, prompt_points_pix, cfg, episode_data_dir, cnt_step):
 
     return rgb_im_draw
 
+# Get the reward value of the waypoints suggested in the image from the belief
 def get_reward_for_pix(
         depth,
         px,
@@ -273,6 +286,8 @@ def get_reward_for_pix(
 
     return reward
 
+# Use VLM to get local semantic values (lsv) and integrate that with the TSDF
+# volume semantic values to rank frontiers
 def integrate_vlm_loss(
         prompt_points_pix,
         vlm,
@@ -310,7 +325,6 @@ def integrate_vlm_loss(
             py = prompt_points_pix[prompt_point_ind][1]
             px = prompt_points_pix[prompt_point_ind][0]
 
-            # I'm not sure why this wasn't needed in the Explore-EQA code?
             if py < 0 or py >= depth.shape[0] or px < 0 or px >= depth.shape[1]:
                 continue
 
@@ -338,6 +352,8 @@ def integrate_vlm_loss(
 
         print("Finishing semantic integration")
 
+# Perfrom next point prediction
+# Rank with VLMs then use TSDF semantic values to get next frontier
 def get_next_point(
         rgb,
         question,
@@ -420,6 +436,12 @@ def get_next_point(
 
     return pts_normal, angle, pts_pix, fig
 
+# Main function of Info Gathering
+# 1. Generate Program and POMDP
+# 2. Loop through until max steps taken or enough information found
+# 2a. Update POMDP
+# 2b. Get new observations
+# 2c. Use observations to get next point
 def info_gather_runner(
         cfg,
         tsdf_bnds,
@@ -441,7 +463,6 @@ def info_gather_runner(
         cam_intr,
         vlm,
         molmo_tools,
-        dino_model,
         debug_f_path,
         episode_data_dir,
         floor_height
@@ -512,7 +533,6 @@ def info_gather_runner(
                 cam_pose_normal,
                 rgb,
                 depth,
-                dino_model,
                 RIG_config,
                 tsdf_planner,
                 cam_intr,

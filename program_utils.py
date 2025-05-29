@@ -33,6 +33,10 @@ def gen_prog_from_nl(nl_question):
     return new_prog
 
 
+# Checks if a natural language answer (from LLM based on produced output of query execution)
+# matches with the ground truth
+
+# Scores from 1 to 5
 def eval_similarity(question, nl_ans, text_answer):
     f = open('./RoboInfoGather/eval_similarity_pre_prompt.txt', 'r')
     pre_prompt = f.read()
@@ -83,6 +87,7 @@ def get_int_str_from_str(val):
     return int_val
 
 
+# Extract a natural language answer from the queries output
 def get_nl_answer(query_exec_res, question, query_str, choices=None):
     f = open('./RoboInfoGather/nl_answer_pre_prompt.txt', 'r')
     pre_prompt = f.read()

@@ -32,6 +32,8 @@ from pydantic import BaseModel
 import instructor
 from typing import Literal
 
+# Two clases below are provided to instructor call
+# to give structure to GPT output
 class Feature(BaseModel):
     feature_type: str
     feature_val: str
@@ -39,11 +41,12 @@ class Feature(BaseModel):
 class Exists(BaseModel):
     exists: Literal['Yes','No']
 
-# Function to encode the image
+# Function to encode the image for GPT
 def encode_image(image_path):
     with open(image_path, "rb") as image_file:
         return base64.b64encode(image_file.read()).decode("utf-8")
 
+# Get new point in real coords based on robot position
 def get_new_node(current_loc, dist, angle, belief):
     # In robot frame: robot direction is X-axis.
 
@@ -63,6 +66,7 @@ def get_new_node(current_loc, dist, angle, belief):
     # Get Map xy
     return real_x, real_y
 
+# Use camera params to get real world coordinates from (x,y) pixel and depth image
 def get_world_coords_from_depth(x, y, depth, camera_pos, camera_pose, camera_intrinsic_mat):
     cx = camera_intrinsic_mat[0][2]
     cy = camera_intrinsic_mat[1][2]
@@ -82,11 +86,12 @@ def get_world_coords_from_depth(x, y, depth, camera_pos, camera_pose, camera_int
     # Rotate to yaw 
 
     world_coords = np.matmul(camera_pose, c_coord2)
-    #print("World Coords 1: ", world_coords)
-    #print("Robot Coords: ", camera_pose)
-    #print("Depth: ", depth)
     return world_coords[0:3]
 
+# Iterate throught pixels in depth image
+# Get depth value as maximum depth
+# Get all the free space from the camera to that point in space
+# Return free space in FOV based on this depth image
 def get_fov_from_depth_image(camera_pos, camera_pose, raw_depth_image, voxel_preds, resolution, z_res, dim, vol_origin, config, cam_int_mat):
     # Max pool to decrease image size
     depth_image = skimage.measure.block_reduce(raw_depth_image, (16,16), np.min)
@@ -110,11 +115,6 @@ def get_fov_from_depth_image(camera_pos, camera_pose, raw_depth_image, voxel_pre
 
                 # Set voxel pred location to 0 here
                 v_xyz = world_to_map(world_coords, vol_origin, resolution, z_res, dim)
-                if False:
-                    print("Current Depth: ", cur_depth)
-                    print("World Coordinates: ", world_coords)
-                    print("Voxel Coordinates: ", v_xyz)
-
                 if not np.isnan(world_coords[2]):
                     voxel_preds[v_xyz[0], v_xyz[1], v_xyz[2]] = config['observation_calc_params']['prob_occ_given_obs_free']
 
@@ -125,7 +125,7 @@ def get_fov_from_depth_image(camera_pos, camera_pose, raw_depth_image, voxel_pre
     
     return voxel_preds
                 
-
+# Get FOV based only on known obstacle map and camera orientation
 def get_fov(current_location, config, camera_params, obstacle_map, belief, debug_print=True):
     min_angle = camera_params['min_angle']
     max_angle = camera_params['max_angle']
@@ -185,8 +185,8 @@ def get_fov(current_location, config, camera_params, obstacle_map, belief, debug
 
     return fov, obstacles
 
-
-def instance_exists(molmo_tools, img, obj_tp):
+# Query VLM to see if an instance of obj_tp exists in img
+def instance_exists(img, obj_tp):
     prompt = f"Is it fairly likely that there is an instance of \'{obj_tp}\' in this image? Please respond with only \'Yes\' or \'No\'."
 
     buffered = BytesIO()
@@ -223,6 +223,7 @@ def instance_exists(molmo_tools, img, obj_tp):
 
     return inst_e
 
+# Query MOLMO to get pixel coordinates of object instances in img
 def get_pixel_coords_molmo(molmo_tools, obj_tp, img):
     coords = []
     molmo_model = molmo_tools['model']
@@ -271,11 +272,12 @@ def get_pixel_coords_molmo(molmo_tools, obj_tp, img):
 
     return coords
 
+# Query VLM to get feature values of the object instance in the cropped image
 def get_feature_vals(cropped_img, coord, obj_tp, feature):
-    x_min = min(cropped_img.shape[1]-1, max(0, int((coord[0] - 100) * (cropped_img.shape[1]-1) / 100)))
-    x_max = min(cropped_img.shape[1]-1, max(0, int((coord[0] + 100) * (cropped_img.shape[1]-1) / 100)))
-    y_min = min(cropped_img.shape[0]-1, max(0, int((coord[1] - 100) * (cropped_img.shape[0]-1) / 100)))
-    y_max = min(cropped_img.shape[0]-1, max(0, int((coord[1] + 100) * (cropped_img.shape[0]-1) / 100)))
+    x_min = min(cropped_img.shape[1]-1, max(0, int(coord[0] - 100)))
+    x_max = min(cropped_img.shape[1]-1, max(0, int(coord[0] + 100)))
+    y_min = min(cropped_img.shape[0]-1, max(0, int(coord[1] - 100)))
+    y_max = min(cropped_img.shape[0]-1, max(0, int(coord[1] + 100)))
 
     # Don't want to crop to practically 0 pixels
     print("Pre-Cropped Image Shape: ", cropped_img.shape)
@@ -290,6 +292,10 @@ def get_feature_vals(cropped_img, coord, obj_tp, feature):
     img = Image.fromarray(cropped_img).convert('RGB')
     print("RGB Image Shape: ", img.size)
 
+
+    ##################################################
+    # SET UP PROMPT WITH PREVIOUS IMAGES AS EXAMPLES #
+    ##################################################
 
     # Path to your image
     image_path = "./RoboInfoGather/feature_pre_prompt_figs/fridge_material.png"
@@ -425,15 +431,20 @@ def get_feature_vals(cropped_img, coord, obj_tp, feature):
     return response.feature_val
 
 
+# Use main object detection from image method
 def obj_detection_molmo(vlm, molmo_tools, cam_int_mat, obj_tp, rgb_img, depth_img, config, camera_pos, camera_pose, feature=None):
     img = np.copy(rgb_img)
     #Image should be torch tensor
     img = Image.fromarray(img).convert('RGB')
 
     coords = []
-    if instance_exists(molmo_tools, img, obj_tp):
+    # Check if instance exists (to help with MOLMO false positives)
+    # If instance exists, get coordinates from MOLMO
+    if instance_exists(img, obj_tp):
         coords = get_pixel_coords_molmo(molmo_tools, obj_tp, img)
 
+    # With all the pixel coordinates get the real world coordinates
+    # and any feature values (if feature is not None)
     feature_ret_vals = [] 
     real_world_coords = []
     for coord in coords:
@@ -447,14 +458,18 @@ def obj_detection_molmo(vlm, molmo_tools, cam_int_mat, obj_tp, rgb_img, depth_im
         if feature != None:
             feature_ret_vals.append(get_feature_vals(cropped_img, coord, obj_tp, feature))
 
-    #Logits?
+    # Return the score as well
     logits = []
     for i in range(len(coords)):
         logits.append(0.9)
 
     return coords, real_world_coords, feature_ret_vals, logits
 
-def get_vox_preds(vlm, molmo_tools, robot_yaw, camera_pos, camera_pose, belief, obj_tp, rgb_image, depth_image, dino_model, config, obstacle_map, camera_intrinsic_mat, feature=None, iteration=0):
+# Main observation function
+# First get all of the free space predictions from the depth image
+# Then use RGB image to find object instances and their features
+# Put the observations into the belief space (voxels) and return
+def get_vox_preds(vlm, molmo_tools, robot_yaw, camera_pos, camera_pose, belief, obj_tp, rgb_image, depth_image, config, obstacle_map, camera_intrinsic_mat, feature=None, iteration=0):
     """
     Function to get predicted value of existence at each voxel (for an object type)
     give observation
@@ -485,6 +500,9 @@ def get_vox_preds(vlm, molmo_tools, robot_yaw, camera_pos, camera_pose, belief, 
     # Get object detection
     pix_coords, real_world_coords, feature_ret_vals, logits = obj_detection_molmo(vlm, molmo_tools, camera_intrinsic_mat, obj_tp, rgb_image, depth_image, config, camera_pos, camera_pose, feature=feature)
 
+    # Based on real world coordinates from object detection
+    # Get voxel coordinates (in belief space) to return for updating
+    # the belief
     print("First BOXES")
     feature_vox_ret_vals = []
     for i in range(len(real_world_coords)):

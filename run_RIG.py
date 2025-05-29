@@ -90,10 +90,6 @@ def main(cfg):
     )
 
     molmo_tools = {'model': molmo_model, 'processor': processor}
-
-    # Where Dino Model Was loaded -- set to none now because it's easier than 
-    # refactoring
-    dino_model = None
     
     # Run all questions
     cnt_data = 0
@@ -220,7 +216,6 @@ def main(cfg):
                 cam_intr,
                 vlm,
                 molmo_tools,
-                dino_model,
                 debug_f_path,
                 episode_data_dir,
                 floor_height
