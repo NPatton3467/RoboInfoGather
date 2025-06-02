@@ -3,6 +3,7 @@ Run EQA in OmniGibson with RoboInfoGather exploration.
 
 """
 
+# General Tool Imports
 import os
 
 os.environ["TRANSFORMERS_VERBOSITY"] = "error"  # disable warning
@@ -25,18 +26,15 @@ from PIL import Image, ImageDraw, ImageFont
 from tqdm import tqdm
 from scipy.spatial.transform import Rotation
 
-import importlib
-VLM = importlib.import_module('explore-eqa.src.vlm').VLM
-
 # RoboInfoGather Imports
 from RoboInfoGather.program_utils import *
 from RoboInfoGather.MCTS_planner import *
 from RoboInfoGather.map_utils import *
 from RoboInfoGather.info_gather_runner import *
 
+# Simulator Imports
 import omnigibson as og
 import omnigibson.lazy as lazy
-
 from omnigibson.robots import REGISTERED_ROBOTS
 from omnigibson.utils.ui_utils import KeyboardRobotController, choose_from_options
 
@@ -48,10 +46,20 @@ gm.OMNIGIBSON_REMOTE_STREAMING="webrtc"
 gm.USE_GPU_DYNAMICS = False
 gm.ENABLE_FLATCACHE = True
 
+# VLM Imports
 from transformers import AutoModelForCausalLM, AutoProcessor, GenerationConfig
 from src.geom import get_cam_intr
+import importlib
+VLM = importlib.import_module('explore-eqa.src.vlm').VLM
+
 
 def load_models(cfg):
+    """
+    Load the VLM models 
+    vlm: Prismatic VLM used in next ranking next waypoints from image
+    molmo_tools: Molmo model and processor used for object detection
+    """
+
     # Load VLM 
     vlm = VLM(cfg.vlm)
     vlm.model._supports_cache_class = False
@@ -83,6 +91,10 @@ def load_models(cfg):
     return vlm_models
 
 def load_dataset(cfg):
+    """
+    Load all of the questions based on the dataset specified in the config
+    """
+
     with open(cfg.question_data_path) as f:
         questions_data = [
             {k: v for k, v in row.items()}
@@ -91,7 +103,7 @@ def load_dataset(cfg):
 
     return questions_data
 
-def setup_environmnet(cfg, questions_data, question_ind):
+def setup_environmet(cfg, questions_data, question_ind):
     # Load the environment
     print("Question?\n", questions_data[question_ind])
     scene_name = questions_data[question_ind]['scene']
@@ -153,14 +165,16 @@ def setup_environmnet(cfg, questions_data, question_ind):
             'map_size': map_size,
             'tsdf_bnds': tsdf_bnds,
             'scene_size': scene_size,
-            'num_step': num_step
+            'num_step': num_step,
             'debug_f_path': setup_debug_dir(cfg, question_ind)
         }
+    
+    # Get initial points and angle
+    position_data = init_position_data(env)
 
-    return env, camera_data, scene_data
+    return env, camera_data, scene_data, position_data
 
 def setup_debug_dir(cfg, question_ind):
-    debug_f_path = f"/robodata/user_data/npatt/explore-eqa/RoboInfoGather/debug/{question_ind}/"
     debug_f_path = cfg.debug_path + f"{question_ind}/"
     if not os.path.isdir(debug_f_path):
         os.mkdir(debug_f_path)
@@ -217,11 +231,9 @@ def init_position_data(env):
 
     return position_data
 
-def save_all_data(cfg, results_all, responses, cnt_data, cum_sim_score, question_ind):
+def save_all_data(cfg, results_all, cnt_data, cum_sim_score, question_ind):
     with open(os.path.join(cfg.output_dir, "results.pkl"), "wb") as f:
         pickle.dump(results_all, f)
-    with open(os.path.join(cfg.output_dir, "responses.txt"), "w") as f:
-        f.write(str(responses))
 
     logging.info(f"\n== All Summary")
     logging.info(f"Number of data collected: {cnt_data}")
@@ -243,13 +255,10 @@ def main(cfg):
     cum_sim_score = 0
     for question_ind in tqdm(range(len(questions_data))):
         # Setup environment
-        env, camera_data, scene_data = setup_envrionment(cfg, questions_data, question_ind)
+        env, camera_data, scene_data, position_data = setup_environment(cfg, questions_data, question_ind)
 
         # Get task information
         task_info = extract_task_info(questions_data, question_ind)
-
-        # Get initial points and angle
-        position_data = init_position_data(env)
 
         ###################################
         # Run Info Gathering for the Task #
@@ -274,7 +283,7 @@ def main(cfg):
 
 
     # Save all data again
-    save_all_data(cfg, results_all, responses, cnt_data, cum_sim_score, question_ind)
+    save_all_data(cfg, results_all, cnt_data, cum_sim_score, question_ind)
 
 if __name__ == "__main__":
     import argparse
