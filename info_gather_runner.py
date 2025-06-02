@@ -9,7 +9,6 @@ import logging
 
 import csv
 import pickle
-import logging
 import math
 import quaternion
 import matplotlib.pyplot as plt

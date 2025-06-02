@@ -103,7 +103,7 @@ def load_dataset(cfg):
 
     return questions_data
 
-def setup_environmet(cfg, questions_data, question_ind):
+def setup_environment(cfg, questions_data, question_ind):
     # Load the environment
     print("Question?\n", questions_data[question_ind])
     scene_name = questions_data[question_ind]['scene']
@@ -268,7 +268,7 @@ def main(cfg):
                 env,
                 camera_data,
                 scene_data,
-                task_info
+                task_info,
                 cum_sim_score,
                 cnt_data,
                 position_data,
