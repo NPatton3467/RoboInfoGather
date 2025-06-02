@@ -84,7 +84,7 @@ def get_result(
 
 # Call synthesis module to generate the program to be executed
 # After program is generated, instantiate the POMDP from the program
-def gen_program(cfg, tsdf_bnds, tsdf_planner, question, pos, angle, RIG_config, max_attempts=10000):
+def gen_program(cfg, tsdf_bnds, tsdf_planner, question, pos, angle, max_attempts=10000):
     attempts = 0
     prog = None
     pomdp = None
@@ -115,7 +115,7 @@ def gen_program(cfg, tsdf_bnds, tsdf_planner, question, pos, angle, RIG_config, 
                         trav_map_og_dim=tsdf_planner._vol_dim,
                         trav_map_og_res=resolution,
                         vol_origin=tsdf_planner._vol_origin,
-                        configs=RIG_config
+                        configs=cfg
                     )
             else:
                 pomdp = gen_pomdp_from_query(
@@ -125,7 +125,7 @@ def gen_program(cfg, tsdf_bnds, tsdf_planner, question, pos, angle, RIG_config, 
                         trav_map_og_dim=tsdf_planner._vol_dim,
                         trav_map_og_res=resolution,
                         vol_origin=tsdf_planner._vol_origin,
-                        configs=RIG_config
+                        configs=cfg
                     )
             break
         except Exception as e:
@@ -255,7 +255,7 @@ def get_reward_for_pix(
         camera_pos,
         cam_pose_normal,
         cam_intr,
-        RIG_config,
+        cfg,
         tsdf_planner,
         pomdp
     ):
@@ -268,7 +268,7 @@ def get_reward_for_pix(
             obstacle_map = tsdf_planner,
             num_prev_obs = 0,
             max_obs = 1,
-            config = RIG_config,
+            config = cfg,
             inbound_act = Action.OBS
             )
     root = MCTS_Tree_Node(
@@ -276,7 +276,7 @@ def get_reward_for_pix(
             obstacle_map = tsdf_planner,
             num_prev_obs = 0,
             max_obs = 1,
-            config = RIG_config,
+            config = cfg,
             inbound_act = Action.OBS
             )
     reward = 0
@@ -300,7 +300,7 @@ def integrate_vlm_loss(
         camera_pos,
         cam_pose_normal,
         cam_intr,
-        RIG_config,
+        cfg,
         tsdf_planner,
         pomdp
     ):
@@ -337,7 +337,7 @@ def integrate_vlm_loss(
                     camera_pos,
                     cam_pose_normal,
                     cam_intr,
-                    RIG_config,
+                    cfg,
                     tsdf_planner,
                     pomdp
                 )
@@ -372,7 +372,6 @@ def get_next_point(
         depth,
         pts,
         angle,
-        RIG_config,
         pomdp
     ):
 
@@ -420,7 +419,7 @@ def get_next_point(
             camera_pos,
             cam_pose_normal,
             cam_intr,
-            RIG_config,
+            cfg,
             tsdf_planner,
             pomdp
         )
@@ -444,28 +443,14 @@ def get_next_point(
 # 2c. Use observations to get next point
 def info_gather_runner(
         cfg,
-        tsdf_bnds,
-        question,
-        text_answer,
-        cum_sim_score,
-        pos,
-        angle,
-        pts,
-        pts_normal,
-        RIG_config,
-        cnt_data,
-        num_step,
-        pitch,
-        roll,
         env,
-        img_width,
-        img_height,
-        cam_intr,
-        vlm,
-        molmo_tools,
-        debug_f_path,
-        episode_data_dir,
-        floor_height
+        camera_data,
+        scene_data,
+        task_info
+        cum_sim_score,
+        cnt_data,
+        position_data,
+        vlm_models
     ):
 
     ################################
@@ -474,15 +459,22 @@ def info_gather_runner(
 
     # Initialize TSDF
     tsdf_planner = TSDFPlanner(
-        vol_bnds=tsdf_bnds,
+        vol_bnds=scene_data['tsdf_bnds'],
         voxel_size=cfg.tsdf_grid_size,
         floor_height_offset=0,
-        pts_init=pts,
+        pts_init=position_data['pts'],
         init_clearance=cfg.init_clearance * 2,
     )
     
     # Generate program and pomdp
-    prog, pomdp = gen_program(cfg, tsdf_bnds, tsdf_planner, question, pos, angle, RIG_config)
+    prog, pomdp = gen_program(
+            cfg,
+            scene_data['tsdf_bnds'],
+            tsdf_planner,
+            task_info['question'],
+            position_data['pts'],
+            position_data['angle']
+        )
     if prog == None:
         return None
 
@@ -500,10 +492,21 @@ def info_gather_runner(
     responses = []
     result = {}
     print("Starting While Loop")
-    while cnt_step < num_step:
+    pts = position_data['pts']
+    angle = position_data['angle']
+    pitch = position_data['pitch']
+    roll = position_data['roll']
+    while cnt_step < scene_data['num_step']:
         logging.info(f"\n== step: {cnt_step}")
         # Update environment
-        pts, angle, cam_pose, cam_pose_tsdf, cam_pose_normal, camera_pos, rgb, depth = env_update(cnt_step, pts, pitch, roll, angle, env)
+        pts, angle, cam_pose, cam_pose_tsdf, cam_pose_normal, camera_pos, rgb, depth = env_update(
+                cnt_step,
+                pts,
+                pitch,
+                roll,
+                angle,
+                env
+            )
         step_name = f"step_{cnt_step}"
         result[step_name] = {"pts": pts, "angle": angle}
 
@@ -511,31 +514,32 @@ def info_gather_runner(
         tsdf_planner.integrate(
             color_im=rgb,
             depth_im=depth,
-            cam_intr=cam_intr,
+            cam_intr=camera_data['cam_intr'],
             cam_pose=cam_pose_tsdf,
             obs_weight=1.0,
-            margin_h=int(cfg.margin_h_ratio * img_height),
-            margin_w=int(cfg.margin_w_ratio * img_width),
+            margin_h=int(cfg.margin_h_ratio * camera_data['img_data']['h']),
+            margin_w=int(cfg.margin_w_ratio * camera_data['img_data']['w']),
         )
 
         # Save volume for debuging
         t_vol = tsdf_planner._tsdf_vol_cpu
+        debug_f_path =  scene_data['debug_f_path']
         np.save(debug_f_path+f"tsdf_volume_{cnt_step}.npy", t_vol)
 
         #################
         # Update Belief #
         #################
         real_world_coords, pix_coords, found_obj = pomdp.update(
-                vlm,
-                molmo_tools,
+                vlm_models['vlm'],
+                vlm_models['molmo_tools'],
                 angle,
                 camera_pos,
                 cam_pose_normal,
                 rgb,
                 depth,
-                RIG_config,
+                cfg,
                 tsdf_planner,
-                cam_intr,
+                camera_data['cam_intr'],
                 cnt_step,
                 pts,
                 debug_f_path
@@ -556,28 +560,27 @@ def info_gather_runner(
         print("Starting VLM check")
         pts_normal, angle, pts_pix, fig = get_next_point(
                 rgb,
-                question,
+                task_info['question'],
                 pts_normal,
                 cam_pose_tsdf,
                 camera_pos,
                 cam_pose_normal,
                 tsdf_planner,
-                img_width,
-                img_height,
-                cam_intr,
+                camera_data['img_data']['w'],
+                camera_data['img_data']['h'],
+                camera_data['cam_intr'],
                 cfg,
-                episode_data_dir,
+                task_info['episode_data_dir'],
                 cnt_step,
-                vlm,
+                vlm_models['vlm'],
                 depth,
                 pts,
                 angle,
-                RIG_config,
                 pomdp
             )
 
         pts_pixs = np.vstack((pts_pixs, pts_pix))
-        pts_normal = np.append(pts_normal, floor_height)
+        pts_normal = np.append(pts_normal, scene_data['floor_height'])
         pts = pts_normal
 
         ##############################
@@ -601,9 +604,9 @@ def info_gather_runner(
     result = get_result(
             prog,
             symbolic_info,
-            question,
+            task_info['question'],
             pomdp,
-            text_answer,
+            task_info['text_answer'],
             cum_sim_score,
             cfg
         )
