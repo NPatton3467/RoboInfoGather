@@ -83,7 +83,28 @@ def get_result(
 
 # Call synthesis module to generate the program to be executed
 # After program is generated, instantiate the POMDP from the program
-def gen_program(cfg, tsdf_bnds, tsdf_planner, question, pos, angle, max_attempts=10000):
+def gen_program_and_pomdp(cfg, tsdf_bnds, tsdf_planner, question, pos, angle, max_attempts=10000):
+
+    """
+    Generate the program and corresponding POMDP to be used for the given task
+
+    Inputs:
+        cfg: The configuration file for experiment specific configurations
+        tsdf_bnds: the bounds of the map used by the tsdf_planner
+        tsdf_planner: TSDFPlanner used throughout execution of experiments
+                        needed here for getting additional information such as
+                        voxel sizes
+        question: The natural language question for this task. Used for generating the program
+        pos: Position of the robot, np.array of [x, y, z] in simulator map frame
+        angle: Yaw of the robot in radians, in simulator map frame
+        max_attempts: Number of retries on synthesizing a valid program before giving up
+
+    Outputs:
+        prog: The program generated that is a valid within the DSL defined in dsl.py
+        pomdp: An instance of POMDP as defined in pomdp.py. This contains beliefs for 
+                each object type and their respective features of interest.
+    """
+
     attempts = 0
     prog = None
     pomdp = None
@@ -135,6 +156,28 @@ def gen_program(cfg, tsdf_bnds, tsdf_planner, question, pos, angle, max_attempts
 
 # Take a step in the environment and recieve updated state (rgb, depth)
 def env_update(cnt_step, pts, pitch, roll, angle, env):
+
+    """
+    This function updates the environment for one step
+
+    Inputs:
+        cnt_step:   The current step of simulation
+        pts:        The current robot position in the simulator map frame
+        pitch:      The camera pitch in the simulator map frame
+        roll:       The camera roll in the simulator map frame
+        angle:      The camera/robot yaw in the simulator map frame
+        env:        The simulation environment to take a step in
+
+    Outputs:
+        pts:            The new robot position in the simulator map frame
+        angle:          The new camera/robot yaw in the simulator map frame
+        cam_pose:       The new rotation matrix + translation of the camera in the simulation map frame
+        cam_pose_tsdf:  The new rotation matrix + translation of the camera in the tsdf map frame
+        camera_pos:     The new position of the camera in the simulation map frame
+        rgb:            The new rgb observation
+        depth:          The new depth observation
+    """
+
     # Save step info and set current pose
     logging.info(f"Current pts: {pts}")
     ori_to_send = Rotation.from_euler('xyz', [pitch, roll, angle], degrees=False).as_quat()
@@ -150,15 +193,13 @@ def env_update(cnt_step, pts, pitch, roll, angle, env):
     print("Quaternion Shape: ", quaternion_0)
     cam_pose[:3, :3] = quaternion.as_rotation_matrix(quaternion.as_quat_array(quaternion_0))
     cam_pose[:3, 3] = translation_0
-    cam_pose_normal = cam_pose
     cam_pose_tsdf = np.dot(
-            cam_pose_normal, np.array([[1, 0, 0, 0], [0, -1, 0, 0], [0, 0, -1, 0], [0, 0, 0, 1]]))
+            cam_pose, np.array([[1, 0, 0, 0], [0, -1, 0, 0], [0, 0, -1, 0], [0, 0, 0, 1]]))
 
     print("\n\nCAMERA STUFF:")
     camera_pos = translation_0
     print("translation_0 (sensor.position): ", translation_0)
     print("cam_pose: ", cam_pose)
-    print("cam_pose_normal: ", cam_pose_normal)
     print("cam_pose_tsdf: ", cam_pose_tsdf)
     print("camera_pos: ", camera_pos)
     print("pts: ", pts)
@@ -171,7 +212,7 @@ def env_update(cnt_step, pts, pitch, roll, angle, env):
     rgb = np.array(state['rob']['rob:eyes:Camera:0']['rgb'].detach().cpu())
     depth = np.array(state['rob']['rob:eyes:Camera:0']['depth_linear'].detach().cpu())
 
-    return pts, angle, cam_pose, cam_pose_tsdf, cam_pose_normal, camera_pos, rgb, depth
+    return pts, angle, cam_pose, cam_pose_tsdf, camera_pos, rgb, depth
 
 # Get frontier points from TSDF volume and see if there are any in the image
 # to check if they are good next waypoints with VLM
@@ -186,6 +227,25 @@ def setup_frontier_pts_in_image(
         episode_data_dir,
         cnt_step
     ):
+
+    """
+    Use the tsdf planner to find the prompt points within view of the current image.
+    Return the pixel value of these prompt_points
+
+    Inputs:
+        pts_normal:             The robot position in the simulator map frame
+        cam_pose_tsdf:          The camera rotation + translation matrix in the tsdf map frame
+        tsdf_planner:           Instance of TSDFPlanner used in for the current task
+        img_width:              The width in pixels of the current image
+        img_height:             The height in pixels of the current image
+        cam_intr:               The camera intrinsic matrix, used to project pixel frame <-> simulator map frame
+        cfg:                    The current task config data
+        episode_data_dir:       The directory to save task information to
+        cnt_step:               The current simulator step
+
+    Outputs:
+        prompt_points_pix:      The pixel values of any points of interest within the current field of view
+    """
 
     print("PTS NORMAL: ", pts_normal)
     print("CAM POSE TSDF: ", cam_pose_tsdf)
@@ -211,6 +271,21 @@ def setup_frontier_pts_in_image(
 
 # Draw the points on the current image for the VLM to rank 
 def draw_image_pts(rgb_im, prompt_points_pix, cfg, episode_data_dir, cnt_step):
+
+    """
+    Draws the pixel points on the current image, with letters (A through D) for the VLM to rank
+
+    Inputs:
+        rgb_im:                 The current RGB image observation
+        prompt_points_pix:      The pixel points of interest (where to draw the letters)
+        cfg:                    The current task configuration data
+        episode_data_dir:       Directory to store current task information
+        cnt_step:               The current simulator step
+
+    Outputs:
+        rgb_im_draw:            rgb_im with the points of interest drawn with A through D
+    """
+
     draw_letters = ["A", "B", "C", "D"]  # always four
     fnt = ImageFont.truetype(
         "RoboInfoGather/explore-eqa/data/Open_Sans/static/OpenSans-Regular.ttf",
@@ -252,16 +327,37 @@ def get_reward_for_pix(
         pts,
         angle,
         camera_pos,
-        cam_pose_normal,
+        cam_pose,
         cam_intr,
         cfg,
         tsdf_planner,
         pomdp
     ):
 
+    """
+    Get the reward value of the waypoints suggested in the image, based on infromation gain in the belief
+
+    Inputs:
+        depth:          The current DEPTH image observation
+        px:             The pixel's x value (int)
+        py:             The pixel's y value (int)
+        pts:            The robot's current position in the simulator map frame
+        angle:          The robot/camera current yaw in the simulator map frame
+        camera_pos:     The camera position in the simulator map frame
+        cam_pose:       The camera rotation + translation matrix in the simulator map frame
+        cam_intr:       The camera intrinsic matrix, used for projecting (pixel frame <-> simulator map frame)
+        cfg:            The current task configuration data
+        tsdf_planner:   Instance of TSDFPlanner, used for selecting next waypoints
+        pomdp:          Instance of POMDP, used for mainting beliefs, for generating information gain reward
+
+    Outputs:
+        reward:         The reward calculated for the proposed pixel. This reward is the information gained
+                            by making an observation at that point (in the simulator map frame)
+    """
+
     cur_depth = depth[py,px]
     print("Getting Reward")
-    world_coords = get_world_coords_from_depth(px, py, cur_depth, camera_pos, cam_pose_normal, cam_intr)
+    world_coords = get_world_coords_from_depth(px, py, cur_depth, camera_pos, cam_pose, cam_intr)
     node = MCTS_Tree_Node(
             loc=Loc(world_coords[0], world_coords[1], angle),
             obstacle_map = tsdf_planner,
@@ -297,12 +393,36 @@ def integrate_vlm_loss(
         pts,
         angle,
         camera_pos,
-        cam_pose_normal,
+        cam_pose,
         cam_intr,
         cfg,
         tsdf_planner,
         pomdp
     ):
+
+    """
+    For each prompt pixel, get the VLM loss and use this as the local semantic value.
+    Integrate the local semantic value into the TSDF planner for use in waypoint selection
+
+    Inputs:
+        prompt_points_pix:      The pixel locations of potential next way points for the VLM to rank
+        vlm:                    The Visual Language Model (prismatic) used to rank the prompt points
+        rgb_im_draw:            The current RGB obsevation with the prompt points drawn on
+        prompt_lsv:             The prompt used to query the VLM for ranking the points in the image
+        draw_letters:           The letters used for the prompt points (A through D)
+        depth:                  The current DEPTH image observation
+        pts:                    The current robot position in the simulator map frame
+        angle:                  The current robot/camera yaw in the simulator map frame
+        camera_pos:             The current camera position in the simulator map frame
+        cam_pose:               The current camera rotation + translation matrix in the simulator map frame
+        cam_intr:               The camera intrinsic matrix used for projecting pixel-frame <-> simulator map frame
+        cfg:                    The current task configuration data
+        tsdf_planner:           Instance of TSDFPlanner used to find next points
+        pomdp:                  Instance of POMDP built from the current task's program.
+                                    Used for generating reward to augment local semantic value with information gain
+
+    Outputs:
+    """
 
     actual_num_prompt_points = len(prompt_points_pix)
     if actual_num_prompt_points >= 1:
@@ -334,7 +454,7 @@ def integrate_vlm_loss(
                     pts,
                     angle,
                     camera_pos,
-                    cam_pose_normal,
+                    cam_pose,
                     cam_intr,
                     cfg,
                     tsdf_planner,
@@ -359,7 +479,7 @@ def get_next_point(
         pts_normal,
         cam_pose_tsdf,
         camera_pos,
-        cam_pose_normal,
+        cam_pose,
         tsdf_planner,
         img_width,
         img_height,
@@ -373,6 +493,40 @@ def get_next_point(
         angle,
         pomdp
     ):
+
+    """
+    Use the VLM to rank potential waypoints within the current view. Then integrate these points in the
+    TSDF planner. Then use the TSDF planner to select the next waypoint
+
+    Inputs:
+        rgb:                The current RGB image observation
+        question:           The natural language question of the current task
+        pts_normal:         The robot's position in the simulator map frame
+        cam_pose_tsdf:      The camera's rotation + translation matrix in the TSDF map frame
+        camera_pos:         The camera's translation in the simulator map frame
+        cam_pose:           The camera's rotation + translation matrix in the simulator map frame
+        tsdf_planner:       The TSDF planner used to select the next waypoint
+        img_width:          The width of the image in pixels
+        img_height:         The height of the image in pixels
+        cam_intr:           The camera intrinsic matrix, used to project from the pixel coordinates to
+                                simulator map frame coordinates
+        cfg:                The task configuration data
+        episode_data_dir:   The directory for saving task data
+        cnt_step:           The current simulator step
+        vlm:                The Visual Language Model (prismatic) used to rank potential waypoints in from
+                                the current view
+        depth:              The current DEPTH image observation
+        angle:              The current robot/camera yaw in the simulator map frame
+        pomdp:              The pomdp built from the current task's program.
+                                Used to add info-gain reward to potential waypoints
+
+    Outputs:
+    return pts_normal, angle, pts_pix, fig
+        pts_normal:     The new points in the simulator map frame selected as the next waypoint
+        angle:          The new robot/camera yaw in the simulator map frame selected for the next waypoint
+        pts_pix:        ??
+        fig:            ??
+    """
 
     # Get VLM prediction
     rgb_im = Image.fromarray(rgb, mode="RGBA").convert("RGB")
@@ -416,7 +570,7 @@ def get_next_point(
             pts,
             angle,
             camera_pos,
-            cam_pose_normal,
+            cam_pose,
             cam_intr,
             cfg,
             tsdf_planner,
@@ -445,7 +599,7 @@ def info_gather_runner(
         env,
         camera_data,
         scene_data,
-        task_info
+        task_info,
         cum_sim_score,
         cnt_data,
         position_data,
@@ -466,7 +620,7 @@ def info_gather_runner(
     )
     
     # Generate program and pomdp
-    prog, pomdp = gen_program(
+    prog, pomdp = gen_program_and_pomdp(
             cfg,
             scene_data['tsdf_bnds'],
             tsdf_planner,
@@ -498,7 +652,7 @@ def info_gather_runner(
     while cnt_step < scene_data['num_step']:
         logging.info(f"\n== step: {cnt_step}")
         # Update environment
-        pts, angle, cam_pose, cam_pose_tsdf, cam_pose_normal, camera_pos, rgb, depth = env_update(
+        pts, angle, cam_pose, cam_pose_tsdf, camera_pos, rgb, depth = env_update(
                 cnt_step,
                 pts,
                 pitch,
@@ -533,7 +687,7 @@ def info_gather_runner(
                 vlm_models['molmo_tools'],
                 angle,
                 camera_pos,
-                cam_pose_normal,
+                cam_pose,
                 rgb,
                 depth,
                 cfg,
@@ -563,7 +717,7 @@ def info_gather_runner(
                 pts_normal,
                 cam_pose_tsdf,
                 camera_pos,
-                cam_pose_normal,
+                cam_pose,
                 tsdf_planner,
                 camera_data['img_data']['w'],
                 camera_data['img_data']['h'],

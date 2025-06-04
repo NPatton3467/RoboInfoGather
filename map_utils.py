@@ -67,6 +67,22 @@ def get_map_params(obj_tp, map_original_dim, map_original_resolution, vol_origin
 
 # Convert world coordinates to other map coordinates (e.g. belief)
 def world_to_map(xyz, vol_origin, map_resolution, z_resolution, map_dim):
+
+    """
+    Convert simulator map frame cooridnates to any map frame cooridnates
+
+    Inputs:
+        xyz:                (np.array) X, Y, Z coordinate values in the simulator map frame
+        vol_origin:         (np.array) X, Y, Z offest of map cooridnate frame relative
+                                to simulator map frame. The x,y,z values are in the simulator map frame
+        map_resolution:     (float) relative scaling of x and y dimensions in map frame
+        z_resolution:       (float) relative scaling of z dimension in map frame
+        map_dim             (np.array) X, Y, Z dimension boundaries of map frame coordinates
+
+    Outputs:
+        coords:          (np.array) X, Y, Z coordinate values in the map frame
+    """
+
     pts = xyz - vol_origin
     coords = np.round(pts / map_resolution).astype(int)
     coords[2] = np.round(pts[2] / z_resolution).astype(int)
@@ -75,15 +91,30 @@ def world_to_map(xyz, vol_origin, map_resolution, z_resolution, map_dim):
 
 # Convert map coordinates (e.g. belief) to world coordinates
 def map_to_world(xyz, vol_origin, map_resolution, z_resolution):
+
+    """
+    Convert any map coordinate frame to simulator map frame
+
+    Inputs:
+        xyz:                (np.array) X, Y, Z coordinate values in the map frame
+        vol_origin:         (np.array) X, Y, Z offest of map cooridnate frame relative
+                                to simulator map frame. The x,y,z values are in the simulator map frame
+        map_resolution:     (float) relative scaling of x and y dimensions in map frame
+        z_resolution:       (float) relative scaling of z dimension in map frame
+
+    Outputs:
+        world_pts:          (np.array) X, Y, Z coordinate values in the simulator map frame
+    """
+
     vol_origin = vol_origin.astype(np.float32)
     vox_coords = xyz.astype(np.float32)
-    cam_pts = np.empty_like(vox_coords, dtype=np.float32)
+    world_pts = np.empty_like(vox_coords, dtype=np.float32)
     for i in range(3):
         if i < 2:
-            cam_pts[i] = vol_origin[i] + (map_resolution * vox_coords[i])
+            world_pts[i] = vol_origin[i] + (map_resolution * vox_coords[i])
         else:
-            cam_pts[i] = vol_origin[i] + (z_resolution * vox_coords[i])
-    return cam_pts
+            world_pts[i] = vol_origin[i] + (z_resolution * vox_coords[i])
+    return world_pts
 
 def get_trav_map(maps_path, floor, resolution, og_resolution):
         """

@@ -68,6 +68,22 @@ def get_new_node(current_loc, dist, angle, belief):
 
 # Use camera params to get real world coordinates from (x,y) pixel and depth image
 def get_world_coords_from_depth(x, y, depth, camera_pos, camera_pose, camera_intrinsic_mat):
+
+    """
+    Use the camera params and depth image to get simulator map frame coordinates from pixel coordinates
+
+    Inputs:
+        x:                      The x coordinate of the pixel to be evaluated (int)
+        y:                      The y coordinate of the pixel to be evaluated (int)
+        depth:                  The current DEPTH image observation
+        camera_pos:             The current camera position in the simulator map frame
+        camera_pose:            The current camera rotation + translation matrix in the simulator map frame
+        camera_intrinsic_mat:   The camera intrinsic matrix used to perform the projection
+
+    Outputs:
+        world_coords:           The simulator map frame coordinates of the pixel (x,y) and depth value (z).
+    """
+
     cx = camera_intrinsic_mat[0][2]
     cy = camera_intrinsic_mat[1][2]
     fx = camera_intrinsic_mat[0][0]
@@ -93,6 +109,28 @@ def get_world_coords_from_depth(x, y, depth, camera_pos, camera_pose, camera_int
 # Get all the free space from the camera to that point in space
 # Return free space in FOV based on this depth image
 def get_fov_from_depth_image(camera_pos, camera_pose, raw_depth_image, voxel_preds, resolution, z_res, dim, vol_origin, config, cam_int_mat):
+
+    """
+    Use the current depth image to get a field of view in the belief map frame (aka the voxel frame)
+
+    Inputs:
+        camera_pos:             The current camera position in the simulator map frame
+        camera_pose:            The current camera rotation + translation matrix in the simulator map frame
+        raw_depth_image:        The current DEPTH image observation
+        voxel_preds:            An empty array, with the same shape as the belief being considered
+        resolution:             The voxel resolution of the belief
+        z_res:                  The voxel resolution of the belief's z-axis
+        dim:                    The dimensions of the belief being considered
+        vol_origin:             The offset of the belief's (0,0,0) coordinate w.r.t. the simulator map frame
+        config:                 The current task configuration data
+        cam_int_mat:            The camera intrinsic matrix used for coordinate transforms between
+                                    pixel coordinate frames and simulator map frame
+
+    Outputs:
+        voxel_preds:            The input 'voxel_preds' array with all voxels within the field of view
+                                    updated if they are predicted to be free space
+    """
+
     # Max pool to decrease image size
     depth_image = skimage.measure.block_reduce(raw_depth_image, (16,16), np.min)
     print("Got Depth Image... Shape: ", depth_image.shape)
@@ -187,6 +225,19 @@ def get_fov(current_location, config, camera_params, obstacle_map, belief, debug
 
 # Query VLM to see if an instance of obj_tp exists in img
 def instance_exists(img, obj_tp):
+
+    """
+    Check whether an instance of a given object type exists within the image
+
+    Inputs:
+        img:        The current RGB image observation
+        obj_tp:     The object type to check for instances of
+
+    Outputs:
+        inst_e:     A boolean representing whether or not an instance of 'obj_tp' exists
+                        in 'img'
+    """
+
     prompt = f"Is it fairly likely that there is an instance of \'{obj_tp}\' in this image? Please respond with only \'Yes\' or \'No\'."
 
     buffered = BytesIO()
@@ -225,6 +276,21 @@ def instance_exists(img, obj_tp):
 
 # Query MOLMO to get pixel coordinates of object instances in img
 def get_pixel_coords_molmo(molmo_tools, obj_tp, img):
+
+    """
+    Get the pixel locations of any object instances of a given type
+
+    Inputs:
+        molmo_tools:            The molmo model and processor used for getting the pixel values
+        obj_tp:                 The object type to get pixel locations of
+        img:                    The current RGB image observation
+
+    Outputs:
+        coords: `               The pixel values cooresponding to instances of 'obj_tp' in 'img'
+                                    as predicted by the molmo model. Each instance of 'obj_tp' should
+                                    correspond to a single pixel coordinate.
+    """
+
     coords = []
     molmo_model = molmo_tools['model']
     processor = molmo_tools['processor']
@@ -274,6 +340,20 @@ def get_pixel_coords_molmo(molmo_tools, obj_tp, img):
 
 # Query VLM to get feature values of the object instance in the cropped image
 def get_feature_vals(cropped_img, coord, obj_tp, feature):
+
+    """
+    Get the value of a given feature corresponding to an object instance of a given type
+
+    Inputs:
+        cropped_img:            The current RGB image observation, cropped around the object instance
+        coord:                  The pixel coordinate of the instance
+        obj_tp:                 The object type of the current instance
+        feature:                The feature to be evalutated
+
+    Outputs:
+        responsed.feature_val:  The predicted value of 'feature' of the current instance of 'obj_tp'
+    """
+
     x_min = min(cropped_img.shape[1]-1, max(0, int(coord[0] - 100)))
     x_max = min(cropped_img.shape[1]-1, max(0, int(coord[0] + 100)))
     y_min = min(cropped_img.shape[0]-1, max(0, int(coord[1] - 100)))
@@ -433,6 +513,34 @@ def get_feature_vals(cropped_img, coord, obj_tp, feature):
 
 # Use main object detection from image method
 def obj_detection_molmo(vlm, molmo_tools, cam_int_mat, obj_tp, rgb_img, depth_img, config, camera_pos, camera_pose, feature=None):
+
+    """
+    Use molmo to detect pixel values of object instances within image
+
+    Inputs:
+        vlm:                Optional VLM (prismatic) which could be used for object detection
+        molmo_tools:        Molmo model and processor for object detection. Used for finding pixel values
+                                of instances within the image
+        cam_int_mat:        Camera intrinsic matrix used to project (pixel coordinate frame <-> 
+                                simulator map frame)
+        obj_tp:             The object type to locate instances of within the image
+        rgb_img:            The current RGB image observation
+        depth_img:          The current DEPTH image observation
+        config:             The current task configuration data
+        camera_pos:         The position of the camera in the simulator map frame
+        camera_pose:        The rotation + translation matrix of the camera in the simulator map frame
+        feature:            (Optional) a string reperesnting a "feature" to predict about the object of type
+                                'obj_tp'
+    Outputs:
+        coords:             A list of coordinates in the pixel coordinate frame representing any 
+                                instance of 'obj_tp' found within the current observation
+        real_world_coords:  Same as 'coords' but projected into the simulator map frame
+        feature_ret_vals:   List of pairs of (voxel-coordinate, feature-value) where voxel-coordinate
+                                is in the belief map frame and feature value is the predicted value
+                                of 'feature' at that voxel
+        logits:             Confidence about the prediction at each of these coordinates
+    """
+
     img = np.copy(rgb_img)
     #Image should be torch tensor
     img = Image.fromarray(img).convert('RGB')
@@ -472,13 +580,41 @@ def obj_detection_molmo(vlm, molmo_tools, cam_int_mat, obj_tp, rgb_img, depth_im
 def get_vox_preds(vlm, molmo_tools, robot_yaw, camera_pos, camera_pose, belief, obj_tp, rgb_image, depth_image, config, obstacle_map, camera_intrinsic_mat, feature=None, iteration=0):
     """
     Function to get predicted value of existence at each voxel (for an object type)
-    give observation
+    given observation
 
-    :param:
+    Inputs:
+        vlm:                    VLM (prismatic) which can be used for object detection
+        molmo_tools:            Contains molmo model and processor which is used for finding pixels cooresponding
+                                    to object instances within the current observation
+        robot_yaw:              Current yaw of the robot in the simulator map frame
+        camera_pos:             Current position of the camera in the simulator map frame
+        belief:                 Object belief for the type of object specified in 'obj_tp'
+        obj_tp:                 The type of object to generate predictions about
+        rgb_image:              The current RGB image observation
+        depth_image:            The current DEPTH image observation
+        config:                 The configuration data of the current task
+        obstacle_map:           An instance of TSDFPlanner, where here the tsdf volume is used for predicting occupied
+                                    regions in space
+        camera_intrinsic_mat:   The camera intrinsic matrix used for coordinate transforms
+                                    from the pixel frame, to the simulator map frame
+        feature:                If not 'None' this string represents the feature of the object
+                                    to generate predictions about
+        iteration:              The current simulator step
 
-
-    :returns: np.array with same size as belief, where voxels within observation are updated based on
-    predicted value of object existence.
+    Outputs:
+    return voxel_preds, feature_vox_ret_vals, (len(pix_coords) > 0), pix_coords, real_world_coords
+        voxel_preds:            A numpy array with the same dimensions as 'belief', which represents
+                                    the predicted likelihood of the information being correct at each
+                                    voxel given the current observation
+        feature_vox_ret_vals:   A list of pairs (voxel coordinate, value) which represents the predicted
+                                    value of 'feature' where instances were found (i.e. for each instance
+                                    find the voxel coordinate, and feature value)
+        (len(pix_coords)>0):    Equivalent to "found_obj". Used to determine if an instance was found
+                                    in functions that call this function
+        pix_coords:             A list of pixel coordinates, corresponding to found instances from the current
+                                    observation
+        real_world_coords:      The pix_coords but projected into the simulator map frame, based on the depth
+                                    image values.
     """
 
     print("Robot Yaw: ", robot_yaw)

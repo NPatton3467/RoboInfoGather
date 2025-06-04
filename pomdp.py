@@ -67,6 +67,17 @@ class POMDP():
             reward += self.reward_funcs[obj_tp].eval(self.bel[obj_tp].p, obstacle_map, root, node)
 
     def make_symbolic(self):
+
+        """
+        Use the information stored in the object and feature beliefs to generate a table of symbolic
+        information that can be used to execute a query. I.e. perform determinization on the object
+        type beliefs to extract instances and their features
+
+        Outputs:
+            symbolic_info:      The object instances and their features. Stored as dictionary of the form
+                                    {obj_tp : {obj_instance : {features}}}
+        """
+
         symbolic_info = {}
         for obj_tp in self.bel:
             # Get the locally supressed belief to help localization
@@ -141,6 +152,19 @@ class POMDP():
     # Compute the average entropy of the beliefs
     # This can be used as a potential stopping criteria
     def compute_average_entropy(self):
+
+        """
+        Compute the average entropy over all of the beliefs maintained by this POMDP.
+        This is used as an early stopping criteria. If average entropy is low enough,
+        it signals that new observations are less likely to produce useful information.
+
+        Inputs:
+        
+        Outputs:
+            avg_entropy:        The average entropy calculated over each object belief maintained by
+                                    this pomdp
+        """
+
         avg_entropy = 0.0
 
         for key in self.bel.keys():
@@ -157,6 +181,19 @@ class POMDP():
 
     # Check whether the beliefs contain enough information to stop
     def enough_info(self, iteration):
+        """
+        Check whether or not the current amount of information stored in the belief
+        is sufficient to answer the question
+
+        Inputs:
+            iteration:      Current simulator step
+
+        Outputs:
+            True/False:     True means that enough information exists for early stopping
+            symbolic_info:  The symbolic information extracted from the object and feature
+                                beliefs maintained by this POMDP instance
+        """
+
         symbolic_info = self.make_symbolic()
         
         # Check if enough found in symbolic execution
@@ -234,6 +271,36 @@ class POMDP():
             pts,
             debug_f_path
         ):
+
+        """
+        Update all object instance and feature beliefs based on the current observations
+
+        Inputs:
+            vlm:                Visual language model (prismatic) which may be used for object detection
+            molmo_tools:        Molmo model and processor, used for finding representative pixel of object
+                                    instances within the image
+            angle:              Current robot/camera yaw in the simulator map frame
+            camera_pos:         Current camera position in the simulator map frame
+            cam_pose_normal:    Current rotation + translation matrix of the camera in the simulation map frame
+            rgb:                Current RGB image observation
+            depth:              Current DEPTH image observation
+            RIG_config:         Configuration data of the current task
+            tsdf_planner:       Instance of TSDFPlanner, which maintains a Truncated-Signed Distance Function 
+                                    map representation, which is used for obstacle detection
+            cam_intr:           Camera intrinsic matrix which is used to project between pixel and simulator 
+                                    coordinate frames
+            cnt_step:           Current simulator step
+            pts:                Current robot position in the simulator map frame
+            debug_f_path:       Directory for saving debug information to
+
+        Outputs:
+            ret_real_coords:    The coordinates of any object instances within the current image in the 
+                                    simulator map frame
+            ret_pix_coords:     The coordinates of any object instances within the current image in the 
+                                    pixel coordinate frame
+            found_obj:          Boolean indicating whether or not an object instance exists in the current
+                                    image
+        """
 
         found_obj = False
         ret_pix_coords = []

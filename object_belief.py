@@ -61,6 +61,27 @@ class ObjTpBel():
 
 
     def update(self, obs, eps=1e-6, feature=None, feature_ret_vals=None):
+
+        """
+        Update the object belief with the observation (voxel values already computed). 
+        If feature is not none, store the feature values (feature_ret_vals) at the corresponding
+        voxel, and update the probability of being observed correct (obs: voxel values already
+        computed).
+
+        Inputs:
+            obs:                A set of voxels (same size and shape as belief) where the value
+                                    [0,1] predicts the probability of the belief value being correct from the 
+                                    most recent observation.
+
+                                    If the belief being updated is not a feature belief, it's the probability
+                                    of an instance of the object type existing at that voxel, from the most
+                                    recent observation.
+            feature:            If not none, this string is used to select which feature we are updating
+                                    the predictions for
+            feature_ret_vals:   A list of pairs of (voxel-coordinates, value) which is used to set the most
+                                    likely value of 'feature' at the given voxel
+        """
+
         if feature is None:
             pre_shape = self.p.shape
             # Update Belief using Binary Bayes Filter
