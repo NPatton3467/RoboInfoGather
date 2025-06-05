@@ -7,35 +7,21 @@ import seaborn as sns
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 import argparse
 import imageio as iio
+import csv
 
 class StandaloneInfoGatherView:
-    def __init__(self, floor_plan, env_img, gt_pts):
+    def __init__(self, floor_plan, env_img, gt_pts, belief_maps):
         self.floor_plan = floor_plan
         self.env_img = env_img
         self.gt_pts = gt_pts
 
-        self.belief_maps = []         # list of (name, heatmap)
-        self.plan = None              # list of (x, y)
-        self.reachable_poses = None   # list of (x, y)
-        self.trajectory = []          # list of (x, y)
-        self.observations = []        # list of (x, y, label)
+        self.belief_maps = belief_maps # list of (name, heatmap)
+        self.plan = None               # list of (x, y)
+        self.reachable_poses = None    # list of (x, y)
+        self.trajectory = []           # list of (x, y)
+        self.observations = []         # list of (x, y, label)
 
         self._build_gui()
-
-    def add_belief_map(self, heatmap: np.ndarray, name: str):
-        self.belief_maps.append((name, heatmap))
-
-    def set_plan(self, path: list):
-        self.plan = path
-
-    def set_reachable_poses(self, poses: list):
-        self.reachable_poses = poses
-
-    def add_trajectory_point(self, x, y):
-        self.trajectory.append((x, y))
-
-    def add_observation(self, x, y, label):
-        self.observations.append((x, y, label))
 
     def _build_gui(self):
         self.root = tk.Tk()
@@ -119,16 +105,17 @@ class StandaloneInfoGatherView:
         self.ax.set_title("InfoGather Visualization")
         self.canvas.draw()
 
-if __name__ == "__main__":
-    parser = argparse.ArgumentParser()
+def load_q_data(question_data_path):
+    # Load the dataset and get the task indexed by the arguments
+    with open(question_data_path) as f:
+        questions_data = [
+            {k: v for k, v in row.items()}
+            for row in csv.DictReader(f, skipinitialspace=True)
+        ]
 
-    parser.add_argument("-s", "--scene")
-    args = parser.parse_args()
+    return questions_data
 
-    scene_name = args.scene
-    floor_file = f"./og_scenes/scenes/{scene_name}/layout/floor_trav_0.png"
-    env_file = f"./og_scenes/birds-eye-views/{scene_name}.png"
-
+def get_floor(floor_file):
     floor = np.array(iio.imread(floor_file))
 
     # Extend to 3 Dims so that array sizes match
@@ -139,6 +126,9 @@ if __name__ == "__main__":
     # Make Alpha Max
     floor[:,:,3] = 255
 
+    return floor
+
+def get_env_bev(env_file):
     env = np.rot90(np.flip(np.array(iio.imread(env_file)), axis=1), k=3)
 
     # Delete 0 Alpha padding in env
@@ -159,11 +149,55 @@ if __name__ == "__main__":
     pad_width = floor.shape[1] - env.shape[1]
     env = np.pad(env, ((0,0), (0,pad_width), (0,0)))
 
+    return env
+
+def get_bel_maps(task_index, shape):
+    # TODO: Expand to cover multiple beliefs for same task
+    belief_file = f"./temp_debug/{task_index}/bel_Chair_71.npy" # TODO: Shouldn't be hard coded when using
+                                                                # but naming convention will change
+    chair_near_table_belief = np.mean(np.load(belief_file), axis=-1)
+
+    chair_near_table_belief = cv2.resize(chair_near_table_belief, 
+                                    (shape[1], shape[0])
+                                )
+
+    belief_maps = [
+            ('Chair near Table', chair_near_table_belief)
+        ]
+
+    return belief_maps
+
+if __name__ == "__main__":
+    # Parse command line arguments
+    parser = argparse.ArgumentParser()
+
+    parser.add_argument("-t", "--task")
+    parser.add_argument("-d", "--data_set")
+    args = parser.parse_args()
+
+    task_index = int(args.task)
+    data_set = args.data_set
+
+    # Load the data set
+    question_data_path = f"./data/{data_set}_questions.csv"
+    questions_data = load_q_data(question_data_path)
+    task = questions_data[task_index]
+    scene_name = task['scene']
+
+    # Get the files to load floor and environment BEV
+    floor_file = f"./og_scenes/scenes/{scene_name}/layout/floor_trav_0.png"
+    env_file = f"./og_scenes/birds-eye-views/{scene_name}.png"
+
+    # Get the floor
+    floor = get_floor(floor_file)
+
+    # Get the env BEV
+    env = get_env_bev(env_file)
+
     print("Floor shape: ", floor.shape)
     print("Env shape: ", env.shape)
     
-    # Temp
-    size = (100,100)
+    # Temp ground truth points
     gt_pts = [
         # Three around dining table
         (565, 390),
@@ -173,8 +207,8 @@ if __name__ == "__main__":
         # One by desk
         (420, 65)
     ]
+   
+    # Get belief maps
+    belief_maps = get_bel_maps(task_index, env.shape)
 
-    viewer = StandaloneInfoGatherView(floor, env, gt_pts)
-
-    heatmap = np.random.rand(*size)
-    viewer.add_belief_map(heatmap, "belief_a")
+    viewer = StandaloneInfoGatherView(floor, env, gt_pts, belief_maps)
