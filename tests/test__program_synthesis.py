@@ -13,7 +13,7 @@ def main(cfg):
         ]
     
     # Run all questions
-    for question_ind in range(10):
+    for question_ind in range(len(questions_data)):
         # Extract question
         question_data = questions_data[question_ind]
         question = question_data["question"]

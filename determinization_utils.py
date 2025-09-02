@@ -13,22 +13,25 @@ def compute_iou_3d(box_a, box_b):
         float: The IoU between the two boxes.
     """
     # Determine the coordinates of the intersection cuboid
-    x_a_max = max(box_a[0], box_b[0])
-    y_a_max = max(box_a[1], box_b[1])
-    z_a_max = max(box_a[2], box_b[2])
-    x_a_min = min(box_a[3], box_b[3])
-    y_a_min = min(box_a[4], box_b[4])
-    z_a_min = min(box_a[5], box_b[5])
+    x_largest_min = max(box_a[0], box_b[0])
+    y_largest_min = max(box_a[1], box_b[1])
+    z_largest_min = max(box_a[2], box_b[2])
+    x_smallest_max = min(box_a[3], box_b[3])
+    y_smallest_max = min(box_a[4], box_b[4])
+    z_smallest_max = min(box_a[5], box_b[5])
 
     # Compute the volume of intersection
-    inter_area = max(0, x_a_min - x_a_max) * max(0, y_a_min - y_a_max) * max(0, z_a_min - z_a_max)
+    x_dim_inter_vol = max(0, x_smallest_max - x_largest_min)
+    y_dim_inter_vol = max(0, y_smallest_max - y_largest_min)
+    z_dim_inter_vol = max(0, z_smallest_max - z_largest_min)
+    inter_vol = x_dim_inter_vol * y_dim_inter_vol * z_dim_inter_vol
 
     # Compute the volume of both bounding boxes
-    box_a_volume = (box_a[3] - box_a[0]) * (box_a[4] - box_a[1]) * (box_a[5] - box_a[2])
-    box_b_volume = (box_b[3] - box_b[0]) * (box_b[4] - box_b[1]) * (box_b[5] - box_b[2])
+    box_a_volume = abs((box_a[3] - box_a[0]) * (box_a[4] - box_a[1]) * (box_a[5] - box_a[2]))
+    box_b_volume = abs((box_b[3] - box_b[0]) * (box_b[4] - box_b[1]) * (box_b[5] - box_b[2]))
 
     # Compute the IoU
-    iou = inter_area / float(box_a_volume + box_b_volume - inter_area)
+    iou = inter_vol / float(box_a_volume + box_b_volume - inter_vol)
     return iou
 
 
@@ -82,10 +85,10 @@ def suppress_non_max(obj_bel):
         z_delta = (obj_bel.map_params['z_res'] * z_dim) / (2 * obj_bel.map_params['obj_z_res'])
         x_min = int(xt - x_delta)
         x_max = int(xt + x_delta)
-        y_min = int(xt - y_delta)
-        y_max = int(xt + y_delta)
-        z_min = int(xt - z_delta)
-        z_max = int(xt + z_delta)
+        y_min = int(yt - y_delta)
+        y_max = int(yt + y_delta)
+        z_min = int(zt - z_delta)
+        z_max = int(zt + z_delta)
 
         print("Deltas:\n")
         print(x_delta)
@@ -98,7 +101,7 @@ def suppress_non_max(obj_bel):
         scores.append(obj_bel.p[xt, yt, zt].detach().cpu())
 
     # Compute NMS
-    iou_threshold = 0.1
+    iou_threshold = 0.25
     print("Boxes: ", boxes)
     print("Scores: ", scores)
     indices = nms_3d(np.array(boxes), np.array(scores), iou_threshold)
@@ -109,3 +112,46 @@ def suppress_non_max(obj_bel):
         ret_xyzs.append(xyzs[i])
 
     return ret_xyzs
+
+def check_for_ambiguity(belief):
+    xyzs = np.argwhere(belief.p.detach().cpu() > 0.5)
+    xyzs = np.swapaxes(xyzs, 0, 1)
+
+    # Loop through and check nearby (doubly nested)
+    for (xt1, yt1, zt1) in xyzs:
+        for (xt2, yt2, zt2) in xyzs:
+            x1 = int(xt1.detach().cpu())
+            y1 = int(yt1.detach().cpu())
+            z1 = int(zt1.detach().cpu())
+            x2 = int(xt2.detach().cpu())
+            y2 = int(yt2.detach().cpu())
+            z2 = int(zt2.detach().cpu())
+
+            # Check if nearby
+            x_diff = (belief.map_params['res'] * abs(x1 - x2)) / belief.map_params['obj_map_res']
+            y_diff = (belief.map_params['res'] * abs(y1 - y2)) / belief.map_params['obj_map_res']
+            z_diff = (belief.map_params['z_res'] * abs(z1 - z2)) / belief.map_params['obj_z_res']
+            x_dim = belief.map_params['dim'][0]
+            y_dim = belief.map_params['dim'][1]
+            z_dim = belief.map_params['dim'][2]
+            x_diff_max = (belief.map_params['res'] * x_dim) / (2 * belief.map_params['obj_map_res'])
+            y_diff_max = (belief.map_params['res'] * y_dim) / (2 * belief.map_params['obj_map_res'])
+            z_diff_max = (belief.map_params['z_res'] * z_dim) / (2 * belief.map_params['obj_z_res'])
+
+            if (x_diff > x_diff_max or
+                y_diff > y_diff_max or
+                z_diff > z_diff_max):
+                continue
+
+            # Check if features equal
+            for feature in belief.feature_bels:
+                if belief.feature_bels[feature]['tp'] != "feature_enum_spatial":
+                    continue
+
+                f1 = belief.feature_bels[feature]['vals'][x1, y1, z1]
+                f2 = belief.feature_bels[feature]['vals'][x2, y2, z2]
+
+                if f1 != f2:
+                    belief.feature_bels[feature]['vals'][x1, y1, z1] = 'ambiguous'
+
+    return belief

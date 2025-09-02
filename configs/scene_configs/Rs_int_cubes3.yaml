@@ -1,5 +1,3 @@
-num_step: 700
-
 env:
   initial_pos_z_offset: 0.1
 
@@ -9,9 +7,9 @@ render:
 
 scene:
   type: InteractiveTraversableScene
-  scene_model: house_double_floor_lower #Change this line and next three to modify scene
-  scene_file: ./omnigibson/data/og_dataset/scenes/house_double_floor_lower/json/house_double_floor_lower_best.json
-  trav_map_path: ./omnigibson/data/og_dataset/scenes/house_double_floor_lower/layout
+  scene_model: Rs_int #Change this line and next three to modify scene
+  scene_file: ./omnigibson/data/og_dataset/scenes/Rs_int/json/Rs_int_best.json
+  trav_map_path: ./omnigibson/data/og_dataset/scenes/Rs_int/layout/
   floor: 0 # By default
   trav_map_resolution: 0.01 # Change this to modify map resolution
   trav_map_erosion: 0
@@ -26,11 +24,45 @@ scene:
   seg_map_resolution: 0.1
   scene_source: OG
   include_robots: true
+    
+objects:
+- type: PrimitiveObject
+  name: cube_0
+  primitive_type: Cube
+  visual_only: false
+  position: [0.75,0,0.15]
+  orientation: [0,0,0,1]
+  rgba: [1, 0, 0, 1.0]
+  scale: [0.2,0.2,0.2]
+- type: PrimitiveObject
+  name: cube_1
+  primitive_type: Cube
+  visual_only: false
+  position: [-2.75,0,0.15]
+  orientation: [0,0,0,1]
+  rgba: [1, 0, 0, 1.0]
+  scale: [0.2,0.2,0.2]
+    #- type: PrimitiveObject
+    #name: cube_2
+    #primitive_type: Cube
+    #visual_only: false
+    #position: [0,0.75,0.15]
+    #orientation: [0,0,0,1]
+    #rgba: [1, 0, 0, 1.0]
+    #scale: [0.2,0.2,0.2]
+    #- type: PrimitiveObject
+    #name: cube_3
+    #primitive_type: Cube
+    #visual_only: false
+    #position: [0,-0.75,0.15]
+    #orientation: [0,0,0,1]
+    #rgba: [1, 0, 0, 1.0]
+    #scale: [0.2,0.2,0.2]
 
 robots:
   - type: Turtlebot
     name: rob
-    obs_modalities: [scan, rgb, depth, depth_linear, occupancy_grid, bbox_3d, seg_instance, seg_instance_id, seg_semantic] # , seg_instance, seg_semantic, bbox_3d]
+    obs_modalities: [scan, rgb, depth, depth_linear, occupancy_grid] # , seg_instance, seg_semantic, bbox_3d]
     scale: 1.0
     self_collision: false
     action_normalize: true

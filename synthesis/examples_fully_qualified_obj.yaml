@@ -1,0 +1,74 @@
+Examples:
+  - name: Task 1
+    prompt: How many cups are there? 
+    program: |
+        program = Count(
+            query=Query(
+                obj_tp="Cup", where_clause=WhereClause(where_tp="true", obj_tp="Cup")
+            ),
+            obj_tp="Cup",
+        )
+    
+  - name: Task 2
+    prompt: How many porcelain sinks are there?
+    program: |
+        program = Count(
+            query=Query(
+                obj_tp="Sink",
+                where_clause=WhereClause(
+                  where_tp="feature_enum",
+                  obj_tp="Sink",
+                  enum_feature="material",
+                  enum_param="Porcelain"
+                ),
+            ),
+            obj_tp="Sink",
+        )
+
+  - name: Task 3
+    prompt: How many lamps are near a bed?
+    program: |
+        program = Count(
+            query=Query(
+                obj_tp="Lamp near a bed",
+                where_clause=WhereClause(
+                  where_tp="True",
+                  obj_tp="Lamp near a bed",
+                ),
+            ),
+            obj_tp="Lamp near a bed",
+        )
+  
+  - name: Task 4
+    prompt: How many lamps are near a bed are on?
+    program: |
+        program = Count(
+            query=Query(
+                obj_tp="Lamp near a bed",
+                where_clause=WhereClause(
+                  where_tp="feature_enum",
+                  obj_tp="Lamp near a bed",
+                  enum_feature="Power Status",
+                  enum_param="On"
+                ),
+            ),
+            obj_tp="Lamp near a bed",
+        )
+
+  - name: Task 5
+    prompt: Is my blanket folded on the couch?
+    program: |
+        program = Map(
+            obj_tp="Blanket on the couch",
+            map_feature="fold status",
+            query=Query(
+                obj_tp="Blanket on the couch",
+                where_clause=WhereClause(
+                  where_tp="feature_enum",
+                  obj_tp="Blanket on the couch",
+                  enum_feature="fold status",
+                  enum_param="folded"
+                ),
+            ),
+            map_tp="feature_enum",
+        )

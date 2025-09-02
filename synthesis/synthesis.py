@@ -82,7 +82,7 @@ class Synthesizer:
             self.preamble = file.read()
 
         with open('/robodata/user_data/npatt/explore-eqa/RoboInfoGather/openaikey.txt', 'r') as f:
-            api_key = f.read()
+            api_key = f.read().rstrip('\n')
 
         self.client = openai.Client(
             api_key=api_key,

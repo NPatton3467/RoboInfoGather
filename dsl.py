@@ -2,6 +2,20 @@ import copy
 import numpy as np
 import openai
 from openai import OpenAI
+import matplotlib as mpl
+mpl.use('Agg')
+from matplotlib import pyplot as plt
+
+# For structured GPT output
+from pydantic import BaseModel
+import instructor
+from typing import Literal
+
+# Two clases below are provided to instructor call
+# to give structure to GPT output
+class Feature(BaseModel):
+    feature_type: str
+    feature_val: str
 
 f = open('/robodata/user_data/npatt/explore-eqa/RoboInfoGather/openaikey.txt', 'r')
 openai_api_key = f.read().rstrip('\n')
@@ -195,6 +209,25 @@ class Count:
 
         return result
 
+class Percent:
+    def __init__(self, query, obj_tp):
+        self.query = query
+        self.obj_tp = obj_tp
+
+    def pretty_str(self):
+        return f"percent({self.query.pretty_str()}, {self.obj_tp})"
+
+    def execute(self, symbolic_info):
+        # Query must have been executed in the real world
+        result = {}
+        query_result = self.query.execute(symbolic_info)
+
+        if self.obj_tp in query_result:
+            percent_val = len(query_result[self.obj_tp]) / float(len(symbolic_info[self.obj_tp]))
+            result[self.obj_tp] = {"Percent" : "{:.0f}%".format(percent_val*100)}
+
+        return result
+
 
 class Aggregator:
     def __init__(self, agg_tp, symbolic_list):
@@ -262,6 +295,10 @@ class Query:
     def __init__(self, obj_tp, where_clause, limit=-1, threshold=0.9):
         self.obj_tp = obj_tp
         self.where_clause = where_clause
+
+        # Make sure object types are consistent
+        assert self.where_clause.obj_tp == self.obj_tp
+
         self.limit = limit
         self.threshold = threshold
 
@@ -351,7 +388,7 @@ class WhereClause:
             return f"min({self.scalar_feature}({self.obj_tp}))"
 
         elif self.where_tp == "spatial_rel":
-            return f"{self.spatial_relation}({self.obj_tp}, {self.obj_tp2})"
+            return f"{self.spatial_relation}({self.obj_tp2}, {self.obj_tp})"
 
         elif self.where_tp == "and":
             return f"{self.sub_where_clause[0].pretty_str()} /\ {self.sub_where_clause[1].pretty_str()}"
@@ -369,7 +406,8 @@ class WhereClause:
         ret_symb_info = {}
         if self.where_tp == 'true':
             ret_symb_info = copy.deepcopy(symbolic_info)
-        elif self.where_tp == "feature_enum" or self.where_tp =="feature_scalar":
+        #elif self.where_tp == "feature_enum" or self.where_tp =="feature_scalar":
+        elif self.where_tp == "feature_enum" or self.where_tp =="feature_scalar" or self.where_tp == "spatial_rel":
             comp = "=="
             if self.scalar_comparator == "Lt":
                 comp = "<"
@@ -396,6 +434,62 @@ class WhereClause:
                                     temp_inst_dict[self.enum_feature] = self.enum_param
 
                                 temp_dict[inst] = temp_inst_dict
+                    
+                    elif self.where_tp == "spatial_rel":
+                        enum_feature = f'{self.spatial_relation} {self.obj_tp2}'
+                        if enum_feature in symbolic_info[self.obj_tp][inst].keys():
+                            # Use LLM to evaluate feature
+                            feature_val = symbolic_info[self.obj_tp][inst][enum_feature]
+
+                            # TEMP
+                            #if feature_val != 'ambiguous':
+                            if feature_val != 'ambiguous' and False:
+                                # END TEMP
+                                eval_true = eval_feature_equality(feature_val, comp, 'True')
+
+                                if eval_true:
+                                    # Make proper feature based on enum_param
+                                    temp_inst_dict = symbolic_info[self.obj_tp][inst]
+                                    temp_inst_dict[enum_feature] = 'True'
+
+                                    temp_dict[inst] = temp_inst_dict
+                            else:
+                                temp_dict1 = {}
+                                temp_dict2 = {}
+                                if self.obj_tp in symbolic_info.keys():
+                                    for inst1 in symbolic_info[self.obj_tp].keys():
+                                        if self.obj_tp2 in symbolic_info.keys():
+                                            for inst2 in symbolic_info[self.obj_tp2].keys():
+                                                # Query LLM for spatial rel
+                                                loc1 = symbolic_info[self.obj_tp][inst1]['bbox_3d']
+                                                loc2 = symbolic_info[self.obj_tp2][inst2]['bbox_3d']
+                                                prompt = f"\n\nNow given object (1) of type {self.obj_tp} with extents {loc1}, and object (2) of type {self.obj_tp2} with extents {loc2}. Is object (2) {self.spatial_relation} object (1)? Please answer with only True or False.\nAnswer:" 
+
+                                                print("\n\nPrompt")
+                                                print(prompt)
+
+
+                                                client = instructor.from_openai(OpenAI(api_key=openai_api_key),
+                                                        mode=instructor.Mode.MD_JSON)
+                                                response = client.chat.completions.create(
+                                                  model="gpt-4o-mini-2024-07-18",
+                                                  response_model=Feature,
+                                                  messages=[{"role": "user", "content": f"{prompt}"}],
+                                                  max_tokens=300,
+                                                )
+
+                                                print("Response: \n", response.feature_val)
+
+                                                # Extract response
+                                                response = response.feature_val
+                                                if response == "True" or response == "true":
+                                                    # Append "spatial_rel" to the temp_dist 1
+                                                    temp_inst_dict = symbolic_info[self.obj_tp][inst1]
+                                                    temp_dict[inst1] = temp_inst_dict
+
+                                # Early break
+                                ret_symb_info[self.obj_tp] = temp_dict                
+                                return ret_symb_info
 
                     elif self.where_tp == "feature_enum":
                         if self.enum_feature in symbolic_info[self.obj_tp][inst].keys():
@@ -444,6 +538,8 @@ class WhereClause:
             ret_symb_info[self.obj_tp] = temp_obj
 
         elif self.where_tp == "spatial_rel":
+            assert False
+            """
             temp_dict1 = {}
             temp_dict2 = {}
             if self.obj_tp in symbolic_info.keys():
@@ -481,6 +577,8 @@ class WhereClause:
 
             ret_symb_info[self.obj_tp] = temp_dict1
             ret_symb_info[self.obj_tp2] = temp_dict2
+            """
+
 
         elif self.where_tp == "and":
             # Check if sub_where is binary predicate -- need to evaluate first

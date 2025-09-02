@@ -10,6 +10,8 @@ from RoboInfoGather.synthesis.synthesis import *
 
 import copy
 
+import matplotlib as mpl
+mpl.use('Agg')
 from matplotlib import pyplot as plt
 
 import openai
@@ -171,53 +173,62 @@ def get_objects_and_features_helper(component):
     # Start with list and then unify
     if type(component) is Query:
         obj_feat = [(component.obj_tp, None, None)]
-        obj_feat += get_objects_and_features_helper(component.where_clause)
-        return obj_feat
+        new_obj_feat, extra_objs = get_objects_and_features_helper(component.where_clause)
+        obj_feat += new_obj_feat
+        return obj_feat, extra_objs
     elif type(component) is WhereClause:
         if component.where_tp == "feature_enum":
-            return [(component.obj_tp, component.enum_feature, "feature_enum")]
+            return [(component.obj_tp, component.enum_feature, "feature_enum")], []
 
         elif component.where_tp == "feature_scalar":
-            return [(component.obj_tp, component.scalar_feature, "feature_scalar")]
+            return [(component.obj_tp, component.scalar_feature, "feature_scalar")], []
 
         elif component.where_tp == "max":
-            return [(component.obj_tp, component.scalar_feature, "feature_scalar")]
+            return [(component.obj_tp, component.scalar_feature, "feature_scalar")], []
 
         elif component.where_tp == "min":
-            return [(component.obj_tp, component.scalar_feature, "feature_scalar")]
+            return [(component.obj_tp, component.scalar_feature, "feature_scalar")], []
 
         elif component.where_tp == "spatial_rel":
-            return [(component.obj_tp2, None, None)]
+            #return [(component.obj_tp2, None, None)]
+            spatial_rel = f'{component.spatial_relation} {component.obj_tp2}'
+            return [(component.obj_tp, spatial_rel, "feature_enum_spatial")], [(component.obj_tp2, None, None)]
 
         elif component.where_tp == "and":
-            obj_feat = get_objects_and_features_helper(component.sub_where_clause[0])
-            obj_feat += get_objects_and_features_helper(component.sub_where_clause[1])
-            return obj_feat
+            obj_feat, extra_objs = get_objects_and_features_helper(component.sub_where_clause[0])
+            obj_feat2, extra_objs2 = get_objects_and_features_helper(component.sub_where_clause[1])
+            obj_feat += obj_feat2
+            extra_objs += extra_objs2
+            return obj_feat, extra_objs
 
         elif component.where_tp == "or":
-            obj_feat = get_objects_and_features_helper(component.sub_where_clause[0])
-            obj_feat += get_objects_and_features_helper(component.sub_where_clause[1])
-            return obj_feat
+            obj_feat, extra_objs = get_objects_and_features_helper(component.sub_where_clause[0])
+            obj_feat2, extra_objs2 = get_objects_and_features_helper(component.sub_where_clause[1])
+            obj_feat += obj_feat2
+            extra_objs += extra_objs2
+            return obj_feat, extra_objs
 
         elif component.where_tp == "not":
-            obj_feat = get_objects_and_features_helper(component.sub_where_clause[0])
-            return obj_feat
+            obj_feat, extra_objs = get_objects_and_features_helper(component.sub_where_clause[0])
+            return obj_feat, extra_objs
 
         elif component.where_tp == "true":
-            return []
+            return [], []
         else:
-            return []
+            return [], []
 
-    elif type(component) is Map or type(component) is Count:
+    elif type(component) is Map or type(component) is Count or type(component) is Percent:
         return get_objects_and_features_helper(component.query)
 
     elif type(component) is Primitives:
         if component.prim_tp == 'real':
-            return []
+            return [], []
         elif component.prim_tp == "op":
-            obj_feat = get_objects_and_features_helper(component.prim_tp)
-            obj_feat += get_objects_and_features_helper(component.prim_tp2)
-            return obj_feat
+            obj_feat, extra_objs = get_objects_and_features_helper(component.prim_tp)
+            obj_feat2, extra_objs2 = get_objects_and_features_helper(component.prim_tp2)
+            obj_feat += obj_feat2
+            extra_objs += extra_objs2
+            return obj_feat, extra_objs
 
         else:
             return get_objects_and_features_helper(component.prim_tp)
@@ -228,7 +239,7 @@ def get_objects_and_features_helper(component):
 
 def get_objects_and_features(query):
     # Start with list and then unify
-    obj_feat_list = get_objects_and_features_helper(query)
+    obj_feat_list, extra_objs_list = get_objects_and_features_helper(query)
 
     # Unify
     obj_feat_dict = {}
@@ -241,7 +252,13 @@ def get_objects_and_features(query):
             enc_feat = {'name': feat, 'tp': tp}
             obj_feat_dict[obj] = [enc_feat]
 
-    return obj_feat_dict
+    extra_objs_dict = {}
+    for obj, feat, tp in extra_objs_list:
+        if obj not in extra_objs_dict:
+            enc_feat = {'name': feat, 'tp': tp}
+            extra_objs_dict[obj] = [enc_feat]
+
+    return obj_feat_dict, extra_objs_dict
 
 def gen_pomdp_from_query(query, pos, yaw, trav_map_og_dim, trav_map_og_res, vol_origin, configs, prev_pomdp=None, gen_inform_priors=None):
     # Recurse on cases where "query" is aggregator, map, primitives, getnth, or count
@@ -261,7 +278,7 @@ def gen_pomdp_from_query(query, pos, yaw, trav_map_og_dim, trav_map_og_res, vol_
         return gen_pomdp_from_query(query.prim2, pos, yaw, trav_map_og_dim, trav_map_og_res, vol_origin, configs, new_pomdp, gen_inform_priors)
     if type(query) is GetNth:
         return gen_pomdp_from_query(query.list, pos, yaw, trav_map_og_dim, trav_map_og_res, vol_origin, configs, prev_pomdp, gen_inform_priors)
-    if type(query) is Count:
+    if type(query) is Count or type(query) is Percent:
         return gen_pomdp_from_query(query.query, pos, yaw, trav_map_og_dim, trav_map_og_res, vol_origin, configs, prev_pomdp, gen_inform_priors)
     if type(query) is Aggregator:
         return gen_pomdp_from_query(query.list, pos, yaw, trav_map_og_dim, trav_map_og_res, vol_origin, configs, prev_pomdp, gen_inform_priors)
@@ -275,17 +292,21 @@ def gen_pomdp_from_query(query, pos, yaw, trav_map_og_dim, trav_map_og_res, vol_
         threshold = query.threshold
         num = query.limit
 
-        obj_feat_dict = get_objects_and_features(query)
+        obj_feat_dict, extra_obj_dict = get_objects_and_features(query)
 
         # Make list
         obj_tp_list = []
         for obj in obj_feat_dict:
             obj_tp_list.append((obj, num, threshold, obj_feat_dict[obj], None))
+        
+        extra_obj_tp_list = []
+        for obj in extra_obj_dict:
+            extra_obj_tp_list.append((obj, None, threshold, None, None))
 
         if gen_inform_priors != None:
             assert False # PRIORS?
         else:
-            new_pomdp = POMDP(query, robot_init_loc, obj_tp_list, trav_map_og_dim, trav_map_og_res, vol_origin, configs)
+            new_pomdp = POMDP(query, robot_init_loc, obj_tp_list, extra_obj_tp_list, trav_map_og_dim, trav_map_og_res, vol_origin, configs)
 
         return new_pomdp
     else:

@@ -1,0 +1,60 @@
+env:
+  initial_pos_z_offset: 0.1
+
+render:
+  viewer_width: 1280
+  viewer_height: 720
+
+scene:
+  type: InteractiveTraversableScene
+  scene_model: Rs_int #Change this line and next three to modify scene
+  scene_file: ./omnigibson/data/og_dataset/scenes/Rs_int/json/Rs_int_best.json
+  trav_map_path: ./omnigibson/data/og_dataset/scenes/Rs_int/layout/
+  floor: 0 # By default
+  trav_map_resolution: 0.01 # Change this to modify map resolution
+  trav_map_erosion: 0
+  trav_map_with_objects: false
+  build_graph: true
+  num_waypoints: 1
+  waypoint_resolution: 0.2
+  load_object_categories: null
+  not_load_object_categories: ["door"] # Can remove object categories here e.g. ["door"]
+  load_room_types: null
+  load_room_instances: null
+  seg_map_resolution: 0.1
+  scene_source: OG
+  include_robots: true
+    
+objects:
+- type: PrimitiveObject
+  name: cube_0
+  primitive_type: Cube
+  visual_only: false
+  position: [0.75,0,0.15]
+  orientation: [0,0,0,1]
+  rgba: [1, 0, 0, 1.0]
+  scale: [0.2,0.2,0.2]
+- type: PrimitiveObject
+  name: cube_1
+  primitive_type: Cube
+  visual_only: false
+  position: [-0.75,0,0.15]
+  orientation: [0,0,0,1]
+  rgba: [1, 0, 0, 1.0]
+  scale: [0.2,0.2,0.2]
+    #- type: PrimitiveObject
+    #name: cube_2
+    #primitive_type: Cube
+    #visual_only: false
+    #position: [0,0.75,0.15]
+    #orientation: [0,0,0,1]
+    #rgba: [1, 0, 0, 1.0]
+    #scale: [0.2,0.2,0.2]
+    #- type: PrimitiveObject
+    #name: cube_3
+    #primitive_type: Cube
+    #visual_only: false
+    #position: [0,-0.75,0.15]
+    #orientation: [0,0,0,1]
+    #rgba: [1, 0, 0, 1.0]
+    #scale: [0.2,0.2,0.2]

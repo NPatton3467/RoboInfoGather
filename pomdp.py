@@ -4,15 +4,18 @@ from RoboInfoGather.map_utils import *
 from RoboInfoGather.determinization_utils import *
 from RoboInfoGather.observation_utils import *
 
+import matplotlib as mpl
+mpl.use('Agg')
 from matplotlib import pyplot as plt
 
 import copy
 import math
 import torch
 import numpy as np
+import pickle
 
 class POMDP():
-    def __init__(self, query, robot_init_loc, obj_tp_list, trav_map_og_dim, trav_map_og_res, vol_origin, configs):
+    def __init__(self, query, robot_init_loc, obj_tp_list, extra_obj_tp_list, trav_map_og_dim, trav_map_og_res, vol_origin, configs):
         # Stopping criteria type
         self.explore_stop = configs['bel_params']['explore_stop']
 
@@ -41,6 +44,12 @@ class POMDP():
                 self.bel[obj_tp] = priors
 
             self.reward_funcs[obj_tp] = RewardFunc(map_params, self.camera_params, self.rf_params)
+        
+        for obj_tp, num, thresh, relevant_features, priors in extra_obj_tp_list:
+            # Get map params based off of current params and obj_tp
+            map_params = get_map_params(obj_tp, self.trav_map_original_dim, self.trav_map_original_resolution, self.vol_origin, configs)
+
+            self.bel[obj_tp] = ObjTpBel(num, thresh, map_params, self.configs, relevant_features)
 
         # Save figures for drawing (one per belief)
         if self.configs['bel_params']['visualize']:
@@ -88,8 +97,13 @@ class POMDP():
             cur_obj_dict = {}
             instance_count = 0
 
+            # Check if there is ambiguity on nearby instances
+            local_bel = check_for_ambiguity(local_bel)
+
             # Get xyz coordinates of potential instances of obj_tp
             xyzs = suppress_non_max(local_bel)
+            print("Suppressed: ", xyzs)
+            print("All maxes: ", np.argwhere(local_bel.p.detach().cpu() > 0.5))
 
             # Evaluate their features and add them to return dict
             for (xt, yt, zt) in xyzs:
@@ -262,8 +276,7 @@ class POMDP():
             angle,
             camera_pos,
             cam_pose_normal,
-            rgb, 
-            depth,
+            obs,
             RIG_config,
             tsdf_planner,
             cam_intr,
@@ -318,8 +331,7 @@ class POMDP():
                     cam_pose_normal,
                     self.bel[obj_tp],
                     obj_tp,
-                    rgb,
-                    depth,
+                    obs,
                     RIG_config,
                     tsdf_planner,
                     cam_intr,
@@ -330,17 +342,19 @@ class POMDP():
             print("Camera Pose: ", cam_pose_normal)
             print("PTS: ", pts)
 
-            ret_pix_coords += pix_coords
-            ret_real_coords += real_world_coords
+            ret_pix_coords.append(pix_coords)
+            ret_real_coords.append(real_world_coords)
 
-            np.save(debug_f_path+f"bel_{obj_tp}_{cnt_step}.npy", np.array(self.bel[obj_tp].p.detach().cpu()))
+            #np.save(debug_f_path+f"bel_{obj_tp}_{cnt_step}.npy", np.array(self.bel[obj_tp].p.detach().cpu()))
+            #with open(debug_f_path+f'bel_{obj_tp}_{cnt_step}.pkl', 'wb') as f:
+            #    pickle.dump(self.bel[obj_tp], f)
 
             # Do the same for each feature
             print("Starting Feature Update in run_RIG")
             for feature in self.bel[obj_tp].feature_bels.keys():
                 # Get predictions for all voxels based on observations
                 print(self.bel[obj_tp])
-                vox_preds, feature_ret_vals, found_obj, pix_coords, real_world_coords = get_vox_preds(
+                vox_preds, feature_ret_vals, found_obj, _, real_world_coords = get_vox_preds(
                         vlm,
                         molmo_tools,
                         angle,
@@ -348,16 +362,23 @@ class POMDP():
                         cam_pose_normal,
                         self.bel[obj_tp],
                         obj_tp,
-                        rgb,
-                        depth,
+                        obs,
                         RIG_config,
                         tsdf_planner,
                         cam_intr,
                         feature=feature,
-                        iteration=cnt_step
+                        iteration=cnt_step,
+                        old_pix_coords = pix_coords
                     )
 
                 self.bel[obj_tp].update(vox_preds, feature=feature, feature_ret_vals=feature_ret_vals)
 
         print("Done Feature Update in run_RIG")
-        return ret_real_coords, ret_pix_coords, found_obj
+
+        # For debugging
+        if found_obj:
+            print("Pix Coords Shape: ", pix_coords)
+            print("Real Coords Shape: ", real_world_coords)
+            #np.save(debug_f_path+f"img_{cnt_step}.npy", obs['rgb'])
+            #np.save(debug_f_path+f"pix_coords_{cnt_step}.npy", pix_coords)
+            #np.save(debug_f_path+f"real_coords_{cnt_step}.npy", real_world_coords)

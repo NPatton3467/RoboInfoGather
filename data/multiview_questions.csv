@@ -1,7 +1,84 @@
 scene,floor,question,choices,question_formatted,answer,label
-Rs_int,0,"How many black chairs are near a table?","['One','Three','Six','Seven']","How many black chairs are near a table? A) One B) Three C) Six D) Seven. Answer:",B,mixed_count
-Rs_int,0,"What percent of black chairs are near a table?","['20%','50%','70%','100%']","What percent of black chairs are near a table? A) 20% B) 50% C) 70% D) 100%. Answer:",D,mixed_percent
-house_double_floor_lower,0,"How many couches are there?","['Zero','One','Three','Four']","How many couches are there? A) Zero B) One C) Three D) Four. Answer:",B,simple_count
-house_double_floor_lower,0,"How many blue couches are there?","['Zero','One','Three','Four']","How many blue couches are there? A) Zero B) One C) Three D) Four. Answer:",B,unary_count
+
+
+Rs_int,0,"How many plants are there?","['1','3','6','8']","How many plants are there? A) 1 B) 3 C) 6 D) 8. Answer:",B,simple_count
+
+Rs_int,0,"How many wooden cabinets are there?","['1','3','6','11']","How many wooden cabinets are there? A) 1 B) 3 C) 6 D) 11. Answer:",D,unary_count
+
+Rs_int,0,"How many cabinets have a plant on top of them?","['2','4','6','8']","How many cabinets have a plant on top of them? A) 2 B) 4 C) 6 D) 8. Answer:",A,binary_count
+
+Rs_int,0,"How many black chairs are near a table?","['1','4','6','7']","How many black chairs are near a table? A) 1 B) 4 C) 6 D) 7. Answer:",B,mixed_count
+
+Rs_int,0,"What percent of cabinets are wooden?","['25%','50%','75%','100%']","What percent of cabinets are wooden? A) 25% B) 50% C) 75% D) 100%. Answer:",D,unary_percent
+
+Rs_int,0,"What percent of cabinets have a plant on top of them?","['0%','10%','18%','50%']","What percent of cabinets have a plant on top of them? A) 0% B) 10% C) 18% D) 50%. Answer:",C,binary_percent
+
+Rs_int,0,"What percent of chairs are black and near a table?","['20%','50%','67%','100%']","What percent of black chairs are near a table? A) 20% B) 50% C) 67% D) 100%. Answer:",C,mixed_percent
+
+
+
+
+house_double_floor_lower,0,"How many pictures are there?","['6','9','13','4']","How many pictures are there? A) 6 B) 9 C) 13 D) 4. Answer:",B,simple_count
+
+house_double_floor_lower,0,"How many lights are off?","['74','16','38','0']","How many lights are off? A) 74 B) 16 C) 38 D) 0. Answer:",C,unary_count
+
+house_double_floor_lower,0,"How many lights are above the couch?","['7','6','4','1']","How many lights are above the couch? A) 7 B) 6 C) 4 D) 1. Answer:",A,binary_count
+
+house_double_floor_lower,0," How many lights are off and above the couch?","['1','3','4','7']"," How many lights are off and above the couch? A) 1 B) 3 C) 4 D) 7. Answer:",D,mixed_count
+
+house_double_floor_lower,0,"What percent of couches are blue?","['0%','20%','70%','100%']","What percent of couches are blue? A) 0% B) 20% C) 70% D) 100%. Answer:",D,unary_percent
+
+house_double_floor_lower,0,"What percent of sinks have a bidet near them?","['17%','50%','60%','100%']","What percent of sinks have a bidet near them? A) 17% B) 50% C) 60% D) 100%. Answer:",B,binary_percent
+
+house_double_floor_lower,0,"What percent of sinks are white and near a toilet?","['0%','25%','50%','100%']","What percent of sinks are white and near a toilet? A) 0% B) 25% C) 50% D) 100%. Answer:",C,mixed_percent
+
+
+
+
+house_single_floor,0,"How many toilets are there?","['0','1','2','4']","How many toilets are there? A) 0 B) 1 C) 2 D) 4. Answer:",C,simple_count
+
+house_single_floor,0,"How many chairs are reclined?","['10','3','2','4']","How many chairs are reclined? A) 10 B) 3 C) 2 D) 4. Answer:",D,unary_count
+
+house_single_floor,0,"How many lamps are next to a bed?","['3','4','5','6']","How many lamps are next to a bed? A) 3 B) 4 C) 5 D) 6. Answer:",A,binary_count
+
+house_single_floor,0,"How many chairs are next to a table and reclined?","['0','7','5','4']","How many chairs are next to a table and reclined? A) 0 B) 7 C) 5 D) 4. Answer:",D,mixed_count
+
 house_single_floor,0,"What percent of sinks are stainless steal?","['0%','25%','75%','100%']","What percent of sinks are stainless steal? A) 0% B) 25% C) 75% D) 100%. Answer:",B,unary_percent
-house_single_floor,0,"How many lamps are next to a bed?","['Three','Four','Five','Six']","How many lamps are next to a bed? A) Three B) Four C) Five D) Six. Answer:",A,binary_count
+
+house_single_floor,0,"What percent of beds have a lamp next to them?","['75%','20%','50%','15%']","What percent of beds have a lamp next to them? A) 75% B) 20% C) 50% D) 15%. Answer:",C,binary_percent
+
+house_single_floor,0,"What percent of chairs are next to a table and reclined?","['0%','15%','100%','43%']",What percent of chairs are next to a table and reclined? A) 0% B) 15% C) 100% D) 43%. Answer:",B,mixed_percent
+
+
+
+
+Beechwood_0_int,0,"How many tables are there?","['2','4','8','10']","How many tables are there? A) 2 B) 4 C) 8 D) 10. Answer:", C, simple_count
+
+Beechwood_0_int,0,"How many wooden shelves are there?","['2','4','6','9']","How many wooden shelves are there? A) 2 B) 4 C) 6 D) 9. Answer:",C,unary_count
+
+Beechwood_0_int,0,"How many sinks have a toilet next to them?","['1','2','3','4']","How many sinks have a toilet next to them? A) 1 B) 2 C) 3 D) 4. Answer:",A,binary_count
+
+Beechwood_0_int,0,"How many tables are not wooden and next to a chair?","['2','4','7','8']","How many tables are not wooden and next to a chair? A) 2 B) 4 C) 7 D) 8. Answer:",B,mixed_count
+
+Beechwood_0_int,0,"What percent of sinks are porcelain?","['67%','70%','40%','0%']","What percent of sinks are porcelain? A) 67% B) 70% C) 40% D) 0%. Answer:",A,unary_percent
+
+Beechwood_0_int,0,"What percent of tables are near a chair?","['25%','60%','75%','50%']","What percent of tables are near a chair? A) 25% B) 60% C) 75% D) 50%. Answer:",C,binary_percent
+
+Beechwood_0_int,0,"What percent of tables are next to a chair and not wooden?","['0%','60%','80%','50%']","What percent of tables are next to a chair and not wooden? A) 0% B) 60% C) 80% D) 50%. Answer:",D,mixed_percent
+
+
+
+
+Merom_0_int,0,"How many couches are there?","['0','2','3','5']","How many couches are there? A) 0 B) 2 C) 3 D) 5. Answer:",B,simple_count
+
+Merom_0_int,0,"How many black couches are there?","['2','5','0','8']","How many black couches are there? A) 2 B) 5 C) 0 D) 8. Answer:",A,unary_count
+
+Merom_0_int,0,"How many area rugs are beside a shelf","['1','2','4','5']","How many area rugs are beside a shelf? A) 1 B) 2 C) 4 D) 5. Answer:",C,binary_count
+
+Merom_0_int,0,"How many wooden shelves don't have a TV on top of them?","['14','10','3','6']","How many wooden shelves don't have a TV on top of them? A) 14 B) 10 C) 3 D) 6. Answer:",D,mixed_count
+
+Merom_0_int,0,"What percent of shelves are wooden?","['100%','40%','60%','0%']","What percent of shelves are wooden? A) 100% B) 40% C) 60% D) 0%. Answer:",A,unary_percent
+
+Merom_0_int,0,"What percent of area rugs are beside a couch?","['24%','36%','43%','89%']","What percent of area rugs are beside a couch? A) 24% B) 36% C) 43% D) 89%. Answer:",B,binary_percent
+
+Merom_0_int,0,"What percent of wooden shelves have a TV on top of them?","['76%','23%','14%','3%']","What percent of wooden shelves have a TV on top of them? A) 76% B) 23% C) 14% D) 3%. Answer:",C,mixed_percent

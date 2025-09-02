@@ -94,7 +94,7 @@ Examples:
             obj_tp2="Bedroom",
             spatial_relation="in",
         )
-        sub_where3=WhereClause(where_tp="feature_enum", obj_tp="Blanket", enum_feature="fold_status", enum_param"folded")
+        sub_where3=WhereClause(where_tp="feature_enum", obj_tp="Blanket", enum_feature="fold_status", enum_param="folded")
         sub_where12 = WhereClasue(where_tp="and", obj_tp="Blanket", sub_where_clause=[sub_where1, sub_where2])
         program = Map(
             obj_tp="Blanket",
@@ -108,4 +108,26 @@ Examples:
                 ),
             ),
             map_tp="feature_enum",
+        )
+  
+  - name: Task 6
+    prompt: What percent of tables are wooden? 
+    program: |
+        where_clause = WhereClause(where_tp="feature_enum", obj_tp="Table", enum_feature="material", enum_param="wood")
+        program = Percent(
+            query=Query(
+                obj_tp="Table", where_clause=where_clause
+            ),
+            obj_tp="Table",
+        )
+
+  - name: Task 7
+    prompt: How many desks have a cup on top of them?
+    program: |
+        where_clause = WhereClause(where_tp="spatial_rel", obj_tp="Desk", obj_tp2="Cup", spatial_relation="on")
+        program = Count(
+            query=Query(
+                obj_tp="Desk", where_clause=where_clause,
+                obj_tp="Desk",
+            )
         )

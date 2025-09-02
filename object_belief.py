@@ -6,7 +6,11 @@ from RoboInfoGather.map_utils import *
 
 class ObjTpBel():
     def __init__(self, num, threshold, map_params, configs, relevant_features=None):
-        self.num = num # Num objects to be found, If None -> unbounded
+        # Num objects to be found, If None -> unbounded
+        if num is None:
+            self.num = -1
+        else:
+            self.num = num # Num objects to be found, If None -> unbounded
         self.threshold = 0.75 # threshold # Existence threshold
         self.map_params = map_params
 
@@ -25,13 +29,18 @@ class ObjTpBel():
 
         # Belief over features
         self.feature_bels = {}
+        # Add feature for 3d bbox
+        if self.relevant_features != None and self.relevant_features != [None]:
+            self.relevant_features.append({'name': 'bbox_3d', 'tp': "feature_enum"})
+        else:
+            self.relevant_features = [{'name': 'bbox_3d', 'tp': "feature_enum"}]
         if self.relevant_features != None and self.relevant_features != [None]:
             for feature in self.relevant_features:
                 if feature['name'] != None:
                     if feature['tp'] == "feature_scalar":
                         feature_dict = {'bel': torch.clone(self.p).to(torch.device(self.device)), "tp" : feature['tp'], "vals": torch.zeros_like(self.p).to(torch.device(self.device))}
                         self.feature_bels[feature['name']] = feature_dict
-                    elif feature['tp'] == "feature_enum":
+                    elif feature['tp'] == "feature_enum" or feature['tp'] == "feature_enum_spatial":
                         # For features, we want to keep around names like colour = red
                         x_dim, y_dim, z_dim = self.p.shape
                         val_z = np.array(['' for _ in range(z_dim)], dtype=object)
@@ -47,6 +56,7 @@ class ObjTpBel():
                     else:
                         assert False # Shouldn't get here
 
+
     
     def pretty_str(self, tp):
         ret_str = "Object: " + str(tp) + "\n\tWidth: " + str(self.map_params['res']) \
@@ -60,7 +70,7 @@ class ObjTpBel():
         return ret_str
 
 
-    def update(self, obs, eps=1e-6, feature=None, feature_ret_vals=None):
+    def update(self, obs, eps=1e-6, feature=None, feature_ret_vals=None, bbox_3d=None):
 
         """
         Update the object belief with the observation (voxel values already computed). 

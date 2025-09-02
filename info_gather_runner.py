@@ -4,19 +4,136 @@ from RoboInfoGather.program_utils import *
 from RoboInfoGather.pomdp import *
 from RoboInfoGather.MCTS_planner import *
 from RoboInfoGather.map_utils import *
+from RoboInfoGather.observation_utils import *
 
 import logging
+
+import time
 
 import csv
 import pickle
 import math
 import quaternion
+import matplotlib as mpl
+mpl.use('Agg')
 import matplotlib.pyplot as plt
 from PIL import Image, ImageDraw, ImageFont
+import seaborn as sns
+import imageio as iio
 from tqdm import tqdm
 from scipy.spatial.transform import Rotation
 
 from collections import OrderedDict
+
+def get_perfect_next_point(tsdf_planner, scene_data):
+    """
+    Used for debugging. Prompts user to select coordinates in the image based on obj_tp
+
+    Inputs:
+        obj_tp:         The object type to look for in the image
+        img:            The image to select coordinates in 
+
+    Ouputs:
+        coords:         A list of pixel coordinates cooresponding to the user's selection
+    """
+
+    # Overlay tsdf_volume on trav_map
+    trav_map = scene_data['trav_map']
+    tsdf = np.rot90(np.flip(tsdf_planner._tsdf_vol_cpu, axis=1), k=1)
+    tsdf = tsdf[:,:,3]
+    tsdf = cv2.resize(tsdf, (trav_map.shape[0], trav_map.shape[1]))
+
+    fig, ax = plt.subplots()
+    ax.imshow(trav_map)
+    sns.heatmap(tsdf, alpha=0.4, cmap='Blues', ax=ax, cbar=False)
+    plt.axis('off')
+    #plt.savefig('temp.png', bbox_inches='tight', pad_inches=0)
+
+    root = tk.Tk()
+    img = np.copy(iio.imread('temp.png'))
+    img = cv2.resize(img, (trav_map.shape[0], trav_map.shape[1]))
+    print(img.shape, trav_map.shape)
+    os.remove('temp.png')
+    app = PixelSelector(root, img)
+    root.mainloop()
+
+    pixels = np.array(app.pixels)
+
+    # Clean up the gui
+    root.destroy()
+    app.shutdown()
+    del(app)
+    del(root)
+
+    ############################
+    # Put pixels in TSDF frame #
+    ############################
+    og_tsdf_shape = np.array(tsdf_planner._tsdf_vol_cpu.shape[:2])
+    tsdf_shape = np.array(tsdf.shape)
+    print(og_tsdf_shape)
+
+    # Resize
+    px_pt_resized = pixels[0] * og_tsdf_shape / tsdf_shape
+    px_ang_resized = pixels[1] * og_tsdf_shape / tsdf_shape
+
+    print(px_pt_resized)
+    print(px_ang_resized)
+
+    # Rotate
+    """
+    Seems like this is coverd by the transformations
+    to get the tsdf into the image frame
+    theta = np.deg2rad(-90)
+    R = np.array([
+        [np.cos(theta), -np.sin(theta)],
+        [np.sin(theta), np.cos(theta)]])
+    
+    px_pt_rotated = np.dot(R, px_pt_resized - og_tsdf_shape/2)
+    px_pt_rotated = np.array([-px_pt_rotated[1], px_pt_rotated[0]]) # FLIP
+    #px_pt_rotated = np.array([px_pt_rotated[0], -px_pt_rotated[1]]) # FLIP
+    px_ang_rotated = np.dot(R, px_ang_resized - og_tsdf_shape/2)
+    px_ang_rotated = np.array([-px_ang_rotated[1], px_ang_rotated[0]]) # FLIP
+    #px_ang_rotated = np.array([px_ang_rotated[0], -px_ang_rotated[1]]) # FLIP
+
+    print(px_pt_rotated)
+    print(px_ang_rotated)
+
+    # Translate back to final tsdf frame
+    tsdf_pt = px_pt_rotated + og_tsdf_shape/2
+    tsdf_ang = px_ang_rotated + og_tsdf_shape/2
+
+    print(tsdf_pt)
+    print(tsdf_ang)
+    """
+
+    tsdf_pt = px_pt_resized
+    tsdf_ang = px_ang_resized
+
+    # Plot to check
+    c_tsdf = np.copy(tsdf_planner._tsdf_vol_cpu)
+    c_tsdf[int(tsdf_pt[0]), int(tsdf_pt[1]), 3] = 5
+    c_tsdf[int(tsdf_ang[0]), int(tsdf_ang[1]), 3] = 5
+
+    #plt.imshow(c_tsdf[:,:,3])
+    #plt.show()
+
+    
+    # Get world coordinates 
+    vox_coords = np.array([[tsdf_pt[0], tsdf_pt[1], 0]])
+    world_pt = tsdf_planner.vox2world(tsdf_planner._vol_origin, vox_coords, tsdf_planner._voxel_size)[0]
+
+    print(world_pt)
+
+    # Get angle
+    diff = tsdf_ang - tsdf_pt
+    angle = np.arctan2(diff[1], diff[0])
+
+    print(angle)
+
+    pts_normal = np.append(world_pt[:2], scene_data['floor_height'])
+    print(pts_normal)
+
+    return pts_normal, angle, fig
 
 # Complile the information produced into the result to be saved to a file
 def get_result(
@@ -26,7 +143,9 @@ def get_result(
         pomdp,
         text_answer,
         cum_sim_score,
-        cfg
+        cfg,
+        question_ind,
+        scene_data
     ):
 
     result = {}
@@ -70,14 +189,8 @@ def get_result(
 
     # Episode summary
     logging.info(f"\n== Episode Summary")
-    logging.info(f"Scene: {scene}, Floor: {floor}")
-    logging.info(f"Question:\n{question}\nAnswer: {answer}")
-
-    # Save data
-    with open(
-        os.path.join(cfg.output_dir, f"results_{cnt_data}.pkl"), "wb"
-    ) as f:
-        pickle.dump(result, f)
+    logging.info(f"Scene: {scene_data['scene_name']}")
+    logging.info(f"Question:\n{question}\nAnswer: {text_answer}")
 
     return result
 
@@ -116,7 +229,7 @@ def gen_program_and_pomdp(cfg, tsdf_bnds, tsdf_planner, question, pos, angle, ma
     print(tsdf_bnds)
     print("VOL DIM: ", tsdf_planner._vol_dim)
     print("VOX SIZE: ", tsdf_planner._voxel_size)
-
+    
     #This format: np.array([-way_point.loc.y, pts[1], way_point.loc.x])
     # Wrapped in try block since pomdp generation can fail through assertions
     # if the output from the LLM synthesizer is incorrect
@@ -180,21 +293,43 @@ def env_update(cnt_step, pts, pitch, roll, angle, env):
 
     # Save step info and set current pose
     logging.info(f"Current pts: {pts}")
+    # TEMP JUST ROTATE
+    #ori_to_send = Rotation.from_euler('xyz', [pitch, roll, angle+np.deg2rad(90)], degrees=False).as_quat()
     ori_to_send = Rotation.from_euler('xyz', [pitch, roll, angle], degrees=False).as_quat()
+    while np.isnan(ori_to_send).any():
+        angle += 1
+        ori_to_send = Rotation.from_euler('xyz', [pitch, roll, angle], degrees=False).as_quat()
+
+    print("Setting rotation")
     env.robots[0].set_position_orientation(pts, ori_to_send)
+    action = OrderedDict([('rob', np.array([0 , 0]))])
+    print("Sending sync actions")
+    state, _, _, _, info = env.step(action) # Take Empty step to get observations
+    state, _, _, _, info = env.step(action) # Take Empty step to get observations
+    state, _, _, _, info = env.step(action) # Take Empty step to get observations
+    print("Getting new position")
+    pts, _ = env.robots[0].get_position_orientation()
+    pts = np.array(pts.cpu().detach())
+    print("Getting new RPY")
+    roll, pitch, angle = env.robots[0].get_rpy()
+    angle = angle.cpu().detach()
     pts_normal = pts
 
-
     # Update camera info
+    print("Getting camera info")
     translation_0, quaternion_0 = env.robots[0]._sensors['rob:eyes:Camera:0'].get_position_orientation()
+    roll_cam, pitch_cam, _ = env.robots[0]._sensors['rob:eyes:Camera:0'].get_rpy()
     quaternion_0 = np.array(quaternion_0.detach().cpu()).astype(float)
     translation_0 = np.array(translation_0.detach().cpu()).astype(float)
     cam_pose = np.eye(4)
     print("Quaternion Shape: ", quaternion_0)
-    cam_pose[:3, :3] = quaternion.as_rotation_matrix(quaternion.as_quat_array(quaternion_0))
+    print("Camera RPY: ", roll_cam, pitch_cam, angle)
+    cam_pose[:3, :3] = Rotation.from_euler('xyz', [0, 0, angle]).as_matrix()
     cam_pose[:3, 3] = translation_0
-    cam_pose_tsdf = np.dot(
-            cam_pose, np.array([[1, 0, 0, 0], [0, -1, 0, 0], [0, 0, -1, 0], [0, 0, 0, 1]]))
+
+    cam_pose_tsdf = np.eye(4)
+    cam_pose_tsdf[:3, :3] = Rotation.from_euler('yxz', [pitch_cam, roll_cam-np.deg2rad(180), angle-np.deg2rad(90)]).as_matrix()
+    cam_pose_tsdf[:3, 3] = translation_0
 
     print("\n\nCAMERA STUFF:")
     camera_pos = translation_0
@@ -207,12 +342,24 @@ def env_update(cnt_step, pts, pitch, roll, angle, env):
     print("\n\n")
 
     # Get observation at current pose
-    action = OrderedDict([('rob', np.array([0 , 0]))])
-    state, _, _, _, info = env.step(action) # Take Empty step to get observations
+    print("Getting new observations")
     rgb = np.array(state['rob']['rob:eyes:Camera:0']['rgb'].detach().cpu())
     depth = np.array(state['rob']['rob:eyes:Camera:0']['depth_linear'].detach().cpu())
+    bbox_3d = state['rob']['rob:eyes:Camera:0']['bbox_3d']
+    seg_sem = state['rob']['rob:eyes:Camera:0']['seg_semantic']
+    seg_inst = state['rob']['rob:eyes:Camera:0']['seg_instance']
+    seg_inst_id = state['rob']['rob:eyes:Camera:0']['seg_instance_id']
 
-    return pts, angle, cam_pose, cam_pose_tsdf, camera_pos, rgb, depth
+    obs = {
+            "rgb": rgb,
+            "depth": depth,
+            "bbox_3d": bbox_3d,
+            "seg_sem": seg_sem,
+            "seg_inst": seg_inst,
+            "info": info
+        }
+
+    return pts, angle, cam_pose, cam_pose_tsdf, camera_pos, obs
 
 # Get frontier points from TSDF volume and see if there are any in the image
 # to check if they are good next waypoints with VLM
@@ -249,6 +396,7 @@ def setup_frontier_pts_in_image(
 
     print("PTS NORMAL: ", pts_normal)
     print("CAM POSE TSDF: ", cam_pose_tsdf)
+
     prompt_points_pix, fig = (
         tsdf_planner.find_prompt_points_within_view(
             pts_normal,
@@ -260,11 +408,11 @@ def setup_frontier_pts_in_image(
         )
     )
     fig.tight_layout()
-    plt.savefig(
-        os.path.join(
-            episode_data_dir, "{}_prompt_points.png".format(cnt_step)
-        )
-    )
+    #plt.savefig(
+    #    os.path.join(
+    #        episode_data_dir, "{}_prompt_points.png".format(cnt_step)
+    #    )
+    #)
     plt.close()
 
     return prompt_points_pix
@@ -313,9 +461,9 @@ def draw_image_pts(rgb_im, prompt_points_pix, cfg, episode_data_dir, cnt_step):
             anchor="mm",
             font_size=12,
         )
-    rgb_im_draw.save(
-        os.path.join(episode_data_dir, f"{cnt_step}_draw.png")
-    )
+    #rgb_im_draw.save(
+    #    os.path.join(episode_data_dir, f"{cnt_step}_draw.png")
+    #)
 
     return rgb_im_draw
 
@@ -460,7 +608,10 @@ def integrate_vlm_loss(
                     tsdf_planner,
                     pomdp
                 )
-            lsv[prompt_point_ind] += 2*reward
+
+            # TEMP -- No reward
+            #lsv[prompt_point_ind] += 2*reward
+            # END TEMP
 
         # Integrate semantics only if there is any prompted point
         tsdf_planner.integrate_sem(
@@ -491,7 +642,8 @@ def get_next_point(
         depth,
         pts,
         angle,
-        pomdp
+        pomdp,
+        scene_data
     ):
 
     """
@@ -519,14 +671,34 @@ def get_next_point(
         angle:              The current robot/camera yaw in the simulator map frame
         pomdp:              The pomdp built from the current task's program.
                                 Used to add info-gain reward to potential waypoints
+        scene_data:         Information about the scene such as floor height, traversability
 
     Outputs:
-    return pts_normal, angle, pts_pix, fig
         pts_normal:     The new points in the simulator map frame selected as the next waypoint
         angle:          The new robot/camera yaw in the simulator map frame selected for the next waypoint
-        pts_pix:        ??
         fig:            ??
     """
+
+    if cfg['use_perfect_next_point']:
+        return get_perfect_next_point(tsdf_planner, scene_data)
+    elif cfg['no_tsdf_vlm']:
+        # get the new camera position
+        cam_pts_normal, angle, _, fig = tsdf_planner.find_next_pose(
+            pts=camera_pos,
+            angle=angle,
+            flag_no_val_weight=cnt_step < cfg.min_random_init_steps,
+            debug_f_path=scene_data['debug_f_path'],
+            cnt_step=cnt_step,
+            **cfg.planner,
+        )
+
+        # Return the robot position
+        #pts_normal = np.append(cam_pts_normal, floor_height) - cam_robot_diff 
+        pts_normal = np.append(cam_pts_normal, scene_data['floor_height']) 
+
+        #plt.show()
+
+        return pts_normal, angle + np.deg2rad(90), fig
 
     # Get VLM prediction
     rgb_im = Image.fromarray(rgb, mode="RGBA").convert("RGB")
@@ -579,14 +751,21 @@ def get_next_point(
 
     print("Getting next pose")
     # Get next pose
-    pts_normal, angle, pts_pix, fig = tsdf_planner.find_next_pose(
-        pts=pts_normal,
+    cam_robot_diff = camera_pos - pts_normal
+
+    # get the new camera position
+    cam_pts_normal, angle, _, fig = tsdf_planner.find_next_pose(
+        pts=camera_pos,
         angle=angle,
         flag_no_val_weight=cnt_step < cfg.min_random_init_steps,
         **cfg.planner,
     )
 
-    return pts_normal, angle, pts_pix, fig
+    # Return the robot position
+    #pts_normal = np.append(cam_pts_normal, floor_height) - cam_robot_diff 
+    pts_normal = np.append(cam_pts_normal, scene_data['floor_height']) 
+
+    return pts_normal, angle, fig
 
 # Main function of Info Gathering
 # 1. Generate Program and POMDP
@@ -603,8 +782,11 @@ def info_gather_runner(
         cum_sim_score,
         cnt_data,
         position_data,
-        vlm_models
+        vlm_models,
+        question_ind
     ):
+
+    start_time = time.time()
 
     ################################
     # Set Up Planner from Question #
@@ -616,8 +798,11 @@ def info_gather_runner(
         voxel_size=cfg.tsdf_grid_size,
         floor_height_offset=0,
         pts_init=position_data['pts'],
-        init_clearance=cfg.init_clearance * 2,
+        init_clearance=0.5,
     )
+
+    # Init point cloud
+    pt_cloud = []
     
     # Generate program and pomdp
     prog, pomdp = gen_program_and_pomdp(
@@ -633,26 +818,30 @@ def info_gather_runner(
 
     print("\n\nProgram: ")
     print(prog.pretty_str())
-    
-    
-    print("\n\nQuery")
-    print(pomdp.query.pretty_str())
+
+    print("\n\nPOMDP Objects:\n", pomdp.bel.keys())
+
+    print("\n\nPOMDP Features:\n")
+    for obj_tp in pomdp.bel.keys():
+        features = pomdp.bel[obj_tp].feature_bels.keys()
+        print(f"Obj: {obj_tp}, Features: {features}")
 
     # Run steps
-    pts_pixs = np.empty((0, 2))  # for plotting path on the image
     cnt_step = 0
     num_black_in_a_row = 0
     responses = []
     result = {}
     print("Starting While Loop")
     pts = position_data['pts']
+
     angle = position_data['angle']
     pitch = position_data['pitch']
     roll = position_data['roll']
     while cnt_step < scene_data['num_step']:
         logging.info(f"\n== step: {cnt_step}")
         # Update environment
-        pts, angle, cam_pose, cam_pose_tsdf, camera_pos, rgb, depth = env_update(
+        print("Starting Env Update")
+        pts, angle, cam_pose, cam_pose_tsdf, camera_pos, obs = env_update(
                 cnt_step,
                 pts,
                 pitch,
@@ -660,36 +849,50 @@ def info_gather_runner(
                 angle,
                 env
             )
+        print("Done Env Update")
         step_name = f"step_{cnt_step}"
         result[step_name] = {"pts": pts, "angle": angle}
 
+        # Update pt_cloud
+        #pt_cloud.append(get_new_points(obs['depth'], camera_pos, cam_pose, camera_data['cam_intr']))
+
         # TSDF fusion
+        print("Starting TSDF integration")
         tsdf_planner.integrate(
-            color_im=rgb,
-            depth_im=depth,
+            color_im=obs['rgb'],
+            depth_im=obs['depth'],
             cam_intr=camera_data['cam_intr'],
             cam_pose=cam_pose_tsdf,
             obs_weight=1.0,
             margin_h=int(cfg.margin_h_ratio * camera_data['img_data']['h']),
             margin_w=int(cfg.margin_w_ratio * camera_data['img_data']['w']),
         )
+        print("Done TSDF Integration")
 
         # Save volume for debuging
         t_vol = tsdf_planner._tsdf_vol_cpu
         debug_f_path =  scene_data['debug_f_path']
-        np.save(debug_f_path+f"tsdf_volume_{cnt_step}.npy", t_vol)
+        #np.save(debug_f_path+f"tsdf_volume_{cnt_step}.npy", t_vol)
+        #with open(debug_f_path+f'tsdf_planner_{cnt_step}.pkl', 'wb') as f:
+        #    pickle.dump(tsdf_planner, f)
+
+        # Save pointcloud for debugging
+        #np.save(debug_f_path+f"point_cloud_{cnt_step}.npy", pt_cloud)
+
+        #np.save(debug_f_path+f"img_{cnt_step}.npy", obs['rgb'])
+        #np.save(debug_f_path+f"depth_img_{cnt_step}.npy", obs['depth'])
 
         #################
         # Update Belief #
         #################
-        real_world_coords, pix_coords, found_obj = pomdp.update(
+        print("Starting Belief Update")
+        pomdp.update(
                 vlm_models['vlm'],
                 vlm_models['molmo_tools'],
                 angle,
                 camera_pos,
                 cam_pose,
-                rgb,
-                depth,
+                obs,
                 cfg,
                 tsdf_planner,
                 camera_data['cam_intr'],
@@ -698,23 +901,16 @@ def info_gather_runner(
                 debug_f_path
             )
 
-        # For debugging
-        if found_obj:
-            print("Pix Coords Shape: ", pix_coords)
-            print("Real Coords Shape: ", real_world_coords)
-            np.save(debug_f_path+f"img_{cnt_step}.npy", rgb)
-            np.save(debug_f_path+f"pix_coords_{cnt_step}.npy", pix_coords)
-            np.save(debug_f_path+f"real_coords_{cnt_step}.npy", real_world_coords)
-
+        print("Done Belief Update")
 
         ########################
         # Determine next point #
         ########################
-        print("Starting VLM check")
-        pts_normal, angle, pts_pix, fig = get_next_point(
-                rgb,
+        print("Starting next point selection")
+        pts, angle, fig = get_next_point(
+                obs['rgb'],
                 task_info['question'],
-                pts_normal,
+                pts,
                 cam_pose_tsdf,
                 camera_pos,
                 cam_pose,
@@ -726,15 +922,22 @@ def info_gather_runner(
                 task_info['episode_data_dir'],
                 cnt_step,
                 vlm_models['vlm'],
-                depth,
+                obs['depth'],
                 pts,
                 angle,
-                pomdp
+                pomdp,
+                scene_data
             )
 
-        pts_pixs = np.vstack((pts_pixs, pts_pix))
-        pts_normal = np.append(pts_normal, scene_data['floor_height'])
-        pts = pts_normal
+        print("Done next point selection")
+
+        fig.tight_layout()
+        #plt.savefig(
+        #    os.path.join(
+        #        debug_f_path, "{}_frontier_selection.png".format(cnt_step)
+        #    )
+        #)
+        plt.close()
 
         ##############################
         # Check for early completion #
@@ -746,6 +949,7 @@ def info_gather_runner(
 
         cnt_step += 1
         print("Done Iteration: ", cnt_step)
+        print("Current Symbolic Info:\n", symbolic_info)
 
     # Get answer from POMDP
     # Check if success using weighted prediction
@@ -754,16 +958,27 @@ def info_gather_runner(
     print("Symbolic Info: ", symbolic_info)
 
     #Set up result and return
-    result = get_result(
+    result_ans = get_result(
             prog,
             symbolic_info,
             task_info['question'],
             pomdp,
             task_info['text_answer'],
             cum_sim_score,
-            cfg
+            cfg,
+            question_ind,
+            scene_data
         )
 
     result = {**result, **result_ans}
+    
+    end_time = time.time()
+    result['wall_time'] = end_time - start_time
+
+    # Save result
+    with open(
+        os.path.join(cfg.output_dir, f"results_{cnt_data}.pkl"), "wb"
+    ) as f:
+        pickle.dump(result, f)
 
     return result

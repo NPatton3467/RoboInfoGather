@@ -1,5 +1,4 @@
-num_step: 700
-
+num_step: 70
 env:
   initial_pos_z_offset: 0.1
 
@@ -9,9 +8,9 @@ render:
 
 scene:
   type: InteractiveTraversableScene
-  scene_model: house_double_floor_lower #Change this line and next three to modify scene
-  scene_file: ./omnigibson/data/og_dataset/scenes/house_double_floor_lower/json/house_double_floor_lower_best.json
-  trav_map_path: ./omnigibson/data/og_dataset/scenes/house_double_floor_lower/layout
+  scene_model: Beechwood_0_int #Change this line and next three to modify scene
+  scene_file: ./omnigibson/data/og_dataset/scenes/Beechwood_0_int/json/Beechwood_0_int_best.json
+  trav_map_path: ./omnigibson/data/og_dataset/scenes/Beechwood_0_int/layout/
   floor: 0 # By default
   trav_map_resolution: 0.01 # Change this to modify map resolution
   trav_map_erosion: 0
@@ -26,7 +25,7 @@ scene:
   seg_map_resolution: 0.1
   scene_source: OG
   include_robots: true
-
+    
 robots:
   - type: Turtlebot
     name: rob

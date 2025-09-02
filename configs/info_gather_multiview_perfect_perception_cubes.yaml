@@ -1,18 +1,16 @@
 seed: 42
-exp_name: RIG_multi_view_exp
+exp_name: RIG_multi_view_perfect_perception_exp
 output_parent_dir: ./RoboInfoGather/results
-question_data_path: ./RoboInfoGather/data/multiview_questions.csv
+question_data_path: ./RoboInfoGather/data/multiview_perfect_perception_questions.csv
 init_pose_data_path: data/scene_init_poses.csv
 scene_config_path: ./RoboInfoGather/configs/scene_configs/
 save_obs: true
 save_freq: 10
 
-debug_path: ./RoboInfoGather/results/RIG_multi_view_exp/debug/
-
-test_frontier: False
+debug_path: ./RoboInfoGather/results/RIG_multi_view_perfect_perception_exp/debug/
 
 vlm:
-  device: cuda:4
+  device: cuda:3
   hf_token: <TOKEN>
   model_id: prism-dinosiglip+7b
 
@@ -25,15 +23,14 @@ hfov: 120
 tsdf_grid_size: 0.1
 margin_w_ratio: 0.25
 margin_h_ratio: 0.6
-use_perfect_perception: False
+use_perfect_perception: True
 
 # Navigation
 init_clearance: 0.5
 max_step_room_size_ratio: 3
 black_pixel_ratio: 0.5
 min_random_init_steps: 2
-use_perfect_next_point: False
-no_tsdf_vlm: True
+use_perfect_next_point: True
 
 # Semantic map
 use_active: true
@@ -51,12 +48,12 @@ planner:
   smooth_sigma: 5
   eps: 1
   min_dist_from_cur: 0.5
-  max_dist_from_cur: 10
+  max_dist_from_cur: 3
   frontier_spacing: 1.5
   frontier_min_neighbors: 3
   frontier_max_neighbors: 4
-  max_unexplored_check_frontier: 1000 #3
-  max_unoccupied_check_frontier: 1 #1
+  max_unexplored_check_frontier: 3
+  max_unoccupied_check_frontier: 1
 
 visual_prompt:
   cluster_threshold: 1.0

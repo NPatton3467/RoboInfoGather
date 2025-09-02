@@ -1,3 +1,5 @@
+#num_step: 50
+num_step: 1
 env:
   initial_pos_z_offset: 0.1
 
@@ -8,8 +10,8 @@ render:
 scene:
   type: InteractiveTraversableScene
   scene_model: Rs_int #Change this line and next three to modify scene
-  scene_file: /robodata/user_data/npatt/OmniGibson/omnigibson/data/og_dataset/scenes/Rs_int/json/Rs_int_best.json
-  trav_map_path: /robodata/user_data/npatt/OmniGibson/omnigibson/data/og_dataset/scenes/Rs_int/layout/
+  scene_file: ./omnigibson/data/og_dataset/scenes/Rs_int/json/Rs_int_best.json
+  trav_map_path: ./omnigibson/data/og_dataset/scenes/Rs_int/layout/
   floor: 0 # By default
   trav_map_resolution: 0.01 # Change this to modify map resolution
   trav_map_erosion: 0
@@ -24,25 +26,26 @@ scene:
   seg_map_resolution: 0.1
   scene_source: OG
   include_robots: true
-
+    
 robots:
-  - type: Turtlebot
-    name: rob
-    obs_modalities: [scan, rgb, depth, depth_linear, occupancy_grid] # , seg_instance, seg_semantic, bbox_3d]
-    scale: 1.0
-    self_collision: false
-    action_normalize: true
-    action_type: continuous
-    visible: false
-    controller_config:
-      base:
-        name: DifferentialDriveController
-    sensor_config:
-      VisionSensor:
-        enabled: True
-        sensor_kwargs:
-          image_height: 1000
-          image_width: 1000
+    - type: Turtlebot
+      name: rob
+      obs_modalities: [scan, rgb, depth, depth_linear, occupancy_grid, bbox_3d, seg_instance, seg_instance_id, seg_semantic] # , seg_instance, seg_semantic, bbox_3d]
+      scale: 1.0
+      self_collision: false
+      action_normalize: true
+      action_type: continuous
+      visible: false
+      visual_only: True
+      controller_config:
+        base:
+          name: DifferentialDriveController
+      sensor_config:
+        VisionSensor:
+          enabled: True
+          sensor_kwargs:
+            image_height: 1000
+            image_width: 1000
       
 task:
   type: DummyTask

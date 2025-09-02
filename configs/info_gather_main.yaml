@@ -1,15 +1,15 @@
 seed: 42
 exp_name: RIG_main_exp
-output_parent_dir: /robodata/user_data/npatt/OmniGibson/RoboInfoGather/results
-question_data_path: /robodata/user_data/npatt/OmniGibson/RoboInfoGather/data/our_questions.csv
+output_parent_dir: ./RoboInfoGather/results
+question_data_path: ./RoboInfoGather/data/our_questions.csv
 init_pose_data_path: data/scene_init_poses.csv
-scene_config_path: /robodata/user_data/npatt/OmniGibson/RoboInfoGather/configs/scene_configs/
+scene_config_path: ./RoboInfoGather/configs/scene_configs/
 save_obs: true
 save_freq: 10
 
-debug_path: /robodata/user_data/npatt/OmniGibson/RoboInfoGather/debug/
+debug_path: ./RoboInfoGather/debug/
 
-rig_config_file_path: /robodata/user_data/npatt/OmniGibson/RoboInfoGather/configs/info_gather_main.yaml
+rig_config_file_path: ./RoboInfoGather/configs/info_gather_main.yaml
 
 vlm:
   device: cuda:3

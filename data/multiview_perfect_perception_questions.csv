@@ -1,0 +1,4 @@
+scene,floor,question,choices,question_formatted,answer,label
+Rs_int_cubes1,0,"How many cubes are there?","['One','Four','Six','Seven']","How many cubes are there? A) One B) Four C) Six D) Seven. Answer:",A,mixed_count
+Rs_int_cubes2,0,"How many cubes are there?","['One','Two','Six','Seven']","How many cubes are there? A) One B) Two C) Six D) Seven. Answer:",B,mixed_count
+Rs_int_cubes3,0,"How many cubes are there?","['One','Two','Six','Seven']","How many cubes are there? A) One B) Two C) Six D) Seven. Answer:",B,mixed_count

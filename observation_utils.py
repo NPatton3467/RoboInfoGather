@@ -6,7 +6,7 @@ from RoboInfoGather.map_utils import *
 #import groundingdino.datasets.transforms as T
 from RoboInfoGather.MCTS_planner import Loc
 
-from PIL import Image
+from PIL import Image, ImageDraw, ImageFont
 
 import torch
 import torchvision.transforms.functional as TF
@@ -14,6 +14,8 @@ import torchvision.transforms.functional as TF
 from scipy.spatial.transform import Rotation as R
 import skimage.measure
 
+import matplotlib as mpl
+mpl.use('Agg')
 from matplotlib import pyplot as plt 
 import glob
 
@@ -32,19 +34,104 @@ from pydantic import BaseModel
 import instructor
 from typing import Literal
 
+# For interactive observations
+import tkinter as tk
+from RoboInfoGather.interactive_pixel_selector import *
+
 # Two clases below are provided to instructor call
 # to give structure to GPT output
 class Feature(BaseModel):
+    object_type: str
     feature_type: str
     feature_val: str
 
 class Exists(BaseModel):
     exists: Literal['Yes','No']
 
+class EquivalentClass(BaseModel):
+    intended_object_type: str
+    instance_object_type: str
+    equivalent: bool
+
 # Function to encode the image for GPT
 def encode_image(image_path):
     with open(image_path, "rb") as image_file:
         return base64.b64encode(image_file.read()).decode("utf-8")
+
+# Function for getting point cloud from depth
+def get_new_points(depth_image, camera_pos, camera_pose, cam_int_mat):
+    pts = []
+    for p_x in range(depth_image.shape[1]):
+        for p_y in range(depth_image.shape[0]):
+            cur_depth = depth_image[p_y, p_x]
+            world_coords = get_world_coords_from_depth(p_x, p_y, cur_depth, camera_pos, camera_pose, cam_int_mat)
+            pts.append(world_coords)
+
+    return pts
+
+def get_bbox_3d_corners(bbox):
+    """Return transformed points in the following order: [LDB, RDB, LUB, RUB, LDF, RDF, LUF, RUF]
+    where R=Right, L=Left, D=Down, U=Up, B=Back, F=Front and LR: x-axis, UD: y-axis, FB: z-axis.
+
+    Args:
+        extents (numpy.ndarray): A structured numpy array containing the fields: [`x_min`, `y_min`,
+            `x_max`, `y_max`, `transform`.
+
+    Returns:
+        (numpy.ndarray): Transformed corner coordinates with shape `(N, 8, 3)`.
+    """
+
+    extents = {
+            "x_min": bbox[1],
+            "y_min": bbox[2],
+            "z_min": bbox[3],
+            "x_max": bbox[4],
+            "y_max": bbox[5],
+            "z_max": bbox[6],
+            "transform": bbox[7]
+    }
+
+    tfs = extents["transform"]
+    rdb = np.matmul([extents["x_max"], extents["y_min"], extents["z_min"], 1], tfs)[:3]
+    ldb = np.matmul([extents["x_min"], extents["y_min"], extents["z_min"], 1], tfs)[:3]
+    lub = np.matmul([extents["x_min"], extents["y_max"], extents["z_min"], 1], tfs)[:3]
+    rub = np.matmul([extents["x_max"], extents["y_max"], extents["z_min"], 1], tfs)[:3]
+    ldf = np.matmul([extents["x_min"], extents["y_min"], extents["z_max"], 1], tfs)[:3]
+    rdf = np.matmul([extents["x_max"], extents["y_min"], extents["z_max"], 1], tfs)[:3]
+    luf = np.matmul([extents["x_min"], extents["y_max"], extents["z_max"], 1], tfs)[:3]
+    ruf = np.matmul([extents["x_max"], extents["y_max"], extents["z_max"], 1], tfs)[:3]
+
+    corners = np.stack((ldb, rdb, lub, rub, ldf, rdf, luf, ruf), 0)
+    #corners_homo = np.pad(corners, ((0, 0), (0, 1)), constant_values=1.0)
+    #print(corners.shape)
+    #print(corners_homo.shape)
+
+    #return np.einsum("jki,ikl->ijl", corners_homo, tfs)[..., :3]
+
+    x_min = None
+    x_max = None
+    y_min = None
+    y_max = None
+    z_min = None
+    z_max = None
+
+    for coord in corners:
+        if x_min == None or coord[0] < x_min:
+            x_min = coord[0]
+        if y_min == None or coord[1] < y_min:
+            y_min = coord[1]
+        if z_min == None or coord[2] < z_min:
+            z_min = coord[2]
+        
+        if x_max == None or coord[0] > x_max:
+            x_max = coord[0]
+        if y_max == None or coord[1] > y_max:
+            y_max = coord[1]
+        if z_max == None or coord[2] > z_max:
+            z_max = coord[2]
+
+    return x_min, y_min, z_min, x_max, y_max, z_max
+
 
 # Get new point in real coords based on robot position
 def get_new_node(current_loc, dist, angle, belief):
@@ -291,6 +378,10 @@ def get_pixel_coords_molmo(molmo_tools, obj_tp, img):
                                     correspond to a single pixel coordinate.
     """
 
+    # Down Sample image if too big
+    down_sampled_img = img.resize((500, 500), Image.Resampling.LANCZOS)
+    print("Image Size for MOLMO: ", down_sampled_img.size)
+
     coords = []
     molmo_model = molmo_tools['model']
     processor = molmo_tools['processor']
@@ -299,20 +390,22 @@ def get_pixel_coords_molmo(molmo_tools, obj_tp, img):
         pre_prompt = f.read()
 
     prompt = pre_prompt + f"Now, please provide the pixel coordinates corresponding to the centroid of any {obj_tp}(s) that are in this image.\n"
-    inputs = processor.process(
-        images=[img],
-        text= prompt
-    )
 
-    # move inputs to the correct device and make a batch of size 1
-    inputs = {k: v.to(molmo_model.device).unsqueeze(0) for k, v in inputs.items()}
+    with torch.autocast("cuda", enabled=True, dtype=torch.float16):
+        inputs = processor.process(
+            images=[down_sampled_img],
+            text= prompt
+        )
 
-    # generate output; maximum 200 new tokens; stop generation when <|endoftext|> is generated
-    output = molmo_model.generate_from_batch(
-        inputs,
-        GenerationConfig(max_new_tokens=200, stop_strings="<|endoftext|>"),
-        tokenizer=processor.tokenizer
-    )
+        # move inputs to the correct device and make a batch of size 1
+        inputs = {k: v.to(molmo_model.device).unsqueeze(0) for k, v in inputs.items()}
+
+        # generate output; maximum 200 new tokens; stop generation when <|endoftext|> is generated
+        output = molmo_model.generate_from_batch(
+            inputs,
+            GenerationConfig(max_new_tokens=200, stop_strings="<|endoftext|>"),
+            tokenizer=processor.tokenizer
+        )
 
     # only get generated tokens; decode them to text
     generated_tokens = output[0,inputs['input_ids'].size(1):]
@@ -332,14 +425,183 @@ def get_pixel_coords_molmo(molmo_tools, obj_tp, img):
             y = float(y[:y_end_idx].lstrip(' '))
             
             if x >= 0 and x < 100 and y >= 0 and y < 100:
+                x = int(x * img.shape[1])
+                y = int(y * img.shape[0])
                 coords.append((x,y))
         except Exception as e:
             print(f"Failed to create pixel {xy} from output")
 
+    print("MOLMO GEN COORDS: ", coords)
+
     return coords
 
-# Query VLM to get feature values of the object instance in the cropped image
-def get_feature_vals(cropped_img, coord, obj_tp, feature):
+# Template to create messages
+class FeatureMessage():
+    def __init__(self, obj_tp, feature, expected_val=''):
+        self.obj_tp = obj_tp
+        self.feature = feature
+        self.expected_val = expected_val
+
+    def make_msg(self):
+        preamble = "You are provided with an object type, and a corresponding feature to evaluate within the image. Please only provide the value of the feature that corresponds to the instance marked with a white circle with the letter `A` inside the white circle."
+        msg = preamble + f"\nObject Type: {self.obj_tp}\nFeature to evaluate: {self.feature}\n\nValue: {self.expected_val}"
+        return msg
+
+
+def get_pre_prompt_msgs():
+    # Path to your image
+    image_path = "./RoboInfoGather/feature_pre_prompt_figs/1_black_chair_2_brown_chairs__black.png"
+
+    # Getting the Base64 string
+    black_chair_image = encode_image(image_path)
+    fm = FeatureMessage(obj_tp='Chair', feature='Colour', expected_val='Black')
+    message_1 = {
+                "role": "user",
+                "content": [
+                        {
+                            "type": "text",
+                            "text": "Example 1: " + fm.make_msg()
+                        },
+                        {
+                            "type": "image_url",
+                            "image_url":{"url" : f"data:image/png;base64,{black_chair_image}"}
+                        }
+                    ]
+            }
+
+    # Path to your image
+    image_path = "./RoboInfoGather/feature_pre_prompt_figs/1_black_chair_2_brown_chairs__brown.png"
+
+    # Getting the Base64 string
+    brown_chair_image = encode_image(image_path)
+    fm = FeatureMessage(obj_tp='Chair', feature='Colour', expected_val='Brown')
+    message_2 = {
+                "role": "user",
+                "content": [
+                        {
+                            "type": "text",
+                            "text": "Example 2: " + fm.make_msg()
+                        },
+                        {
+                            "type": "image_url",
+                            "image_url":{"url" : f"data:image/png;base64,{brown_chair_image}"}
+                        }
+                    ]
+            }
+    
+    # Path to your image
+    image_path = "./RoboInfoGather/feature_pre_prompt_figs/plant_near_couch.png"
+
+    # Getting the Base64 string
+    plant_image = encode_image(image_path)
+    fm = FeatureMessage(obj_tp='Plant', feature='Near Couch', expected_val='True')
+    message_3 = {
+                "role": "user",
+                "content": [
+                        {
+                            "type": "text",
+                            "text": "Example 3: " + fm.make_msg()
+                        },
+                        {
+                            "type": "image_url",
+                            "image_url":{"url" : f"data:image/png;base64,{plant_image}"}
+                        }
+                    ]
+            }
+    
+    # Path to your image
+    image_path = "./RoboInfoGather/feature_pre_prompt_figs/tv_off.png"
+
+    # Getting the Base64 string
+    tv_image = encode_image(image_path)
+    fm = FeatureMessage(obj_tp='TV', feature='Power Status', expected_val='Off')
+    message_4 = {
+                "role": "user",
+                "content": [
+                        {
+                            "type": "text",
+                            "text": "Example 4: " + fm.make_msg()
+                        },
+                        {
+                            "type": "image_url",
+                            "image_url":{"url" : f"data:image/png;base64,{tv_image}"}
+                        }
+                    ]
+            }
+    
+    # Path to your image
+    image_path = "./RoboInfoGather/feature_pre_prompt_figs/light_above_table.png"
+
+    # Getting the Base64 string
+    light_image = encode_image(image_path)
+    fm = FeatureMessage(obj_tp='Light', feature='Below Table', expected_val='False')
+    message_5 = {
+                "role": "user",
+                "content": [
+                        {
+                            "type": "text",
+                            "text": "Example 5: " + fm.make_msg()
+                        },
+                        {
+                            "type": "image_url",
+                            "image_url":{"url" : f"data:image/png;base64,{light_image}"}
+                        }
+                    ]
+            }
+    
+    # Path to your image
+    image_path = "./RoboInfoGather/feature_pre_prompt_figs/sink_porcelain.png"
+
+    # Getting the Base64 string
+    sink_image = encode_image(image_path)
+    fm = FeatureMessage(obj_tp='Sink', feature='Material', expected_val='Porcelain')
+    message_6 = {
+                "role": "user",
+                "content": [
+                        {
+                            "type": "text",
+                            "text": "Example 6: " + fm.make_msg()
+                        },
+                        {
+                            "type": "image_url",
+                            "image_url":{"url" : f"data:image/png;base64,{sink_image}"}
+                        }
+                    ]
+            }
+    
+    # Path to your image
+    image_path = "./RoboInfoGather/feature_pre_prompt_figs/fridge_not_near_microwave.png"
+
+    # Getting the Base64 string
+    fridge_image = encode_image(image_path)
+    fm = FeatureMessage(obj_tp='Fridge', feature='Near Microwave', expected_val='False')
+    message_7 = {
+                "role": "user",
+                "content": [
+                        {
+                            "type": "text",
+                            "text": "Example 7: " + fm.make_msg()
+                        },
+                        {
+                            "type": "image_url",
+                            "image_url":{"url" : f"data:image/png;base64,{fridge_image}"}
+                        }
+                    ]
+            }
+
+    messages = [
+        message_1,
+        message_2,
+        message_3,
+        message_4,
+        message_5,
+        message_6,
+        message_7
+    ]
+
+    return messages
+
+def get_feature_vals_cropped(cropped_img, coord, obj_tp, feature, cfg):
 
     """
     Get the value of a given feature corresponding to an object instance of a given type
@@ -354,135 +616,20 @@ def get_feature_vals(cropped_img, coord, obj_tp, feature):
         responsed.feature_val:  The predicted value of 'feature' of the current instance of 'obj_tp'
     """
 
-    x_min = min(cropped_img.shape[1]-1, max(0, int(coord[0] - 100)))
-    x_max = min(cropped_img.shape[1]-1, max(0, int(coord[0] + 100)))
-    y_min = min(cropped_img.shape[0]-1, max(0, int(coord[1] - 100)))
-    y_max = min(cropped_img.shape[0]-1, max(0, int(coord[1] + 100)))
-
-    # Don't want to crop to practically 0 pixels
-    print("Pre-Cropped Image Shape: ", cropped_img.shape)
-    if (x_max - x_min) >= 5 and (y_max - y_min) >= 5:
-        cropped_img = cropped_img[y_min:y_max, x_min:x_max, :]
-   
-    print("Post-Cropped Image Shape: ", cropped_img.shape)
-    print("x_max: ", x_max)
-    print("x_min: ", x_min)
-    print("y_max: ", y_max)
-    print("y_min: ", y_min)
     img = Image.fromarray(cropped_img).convert('RGB')
-    print("RGB Image Shape: ", img.size)
+    messages = []
 
-
-    ##################################################
-    # SET UP PROMPT WITH PREVIOUS IMAGES AS EXAMPLES #
-    ##################################################
-
-    # Path to your image
-    image_path = "./RoboInfoGather/feature_pre_prompt_figs/fridge_material.png"
-
-    # Getting the Base64 string
-    fridge_image = encode_image(image_path)
-
-    message_1 = {
-                "role": "user",
-                "content": [
-                        {
-                            "type": "text",
-                            "text": "Example 1\nObject Type: Fridge\nFeature to evaluate: material\n\nValue: Stainless Steel"
-                        },
-                        {
-                            "type": "image_url",
-                            "image_url":{"url" : f"data:image/png;base64,{fridge_image}"}
-                        }
-                    ]
-            }
-
-    # Path to your image
-    image_path = "./RoboInfoGather/feature_pre_prompt_figs/blanket_folded.png"
-
-    # Getting the Base64 string
-    blanket_image = encode_image(image_path)
-    message_2 = {
-                "role": "user",
-                "content": [
-                        {
-                            "type": "text",
-                            "text": "Example 2\nObject Type: Blanket\nFeature to evaluate: folded\n\nValue: Yes"
-                        },
-                        {
-                            "type": "image_url",
-                            "image_url":{"url" : f"data:image/png;base64,{blanket_image}"}
-                        }
-                    ]
-            }
-    
-    # Path to your image
-    image_path = "./RoboInfoGather/feature_pre_prompt_figs/curtain_colour_white.png"
-
-    # Getting the Base64 string
-    curtain_image = encode_image(image_path)
-    message_3 = {
-                "role": "user",
-                "content": [
-                        {
-                            "type": "text",
-                            "text": "Example 3\nObject Type: Curtain\nFeature to evaluate: colour\n\nValue: White"
-                        },
-                        {
-                            "type": "image_url",
-                            "image_url":{"url" : f"data:image/png;base64,{curtain_image}"}
-                        }
-                    ]
-            }
-    
-    # Path to your image
-    image_path = "./RoboInfoGather/feature_pre_prompt_figs/door_closed.png"
-
-    # Getting the Base64 string
-    door_image = encode_image(image_path)
-    message_4 = {
-                "role": "user",
-                "content": [
-                        {
-                            "type": "text",
-                            "text": "Example 4\nObject Type: Door\nFeature to evaluate: open\n\nValue: closed"
-                        },
-                        {
-                            "type": "image_url",
-                            "image_url":{"url" : f"data:image/png;base64,{door_image}"}
-                        }
-                    ]
-            }
-    
-    # Path to your image
-    image_path = "./RoboInfoGather/feature_pre_prompt_figs/overhead_light_on.png"
-
-    # Getting the Base64 string
-    light_image = encode_image(image_path)
-    message_5 = {
-                "role": "user",
-                "content": [
-                        {
-                            "type": "text",
-                            "text": "Example 5\nObject Type: Light\nFeature to evaluate: turned on\n\nValue: on"
-                        },
-                        {
-                            "type": "image_url",
-                            "image_url":{"url" : f"data:image/png;base64,{light_image}"}
-                        }
-                    ]
-            }
-    
     buffered = BytesIO()
-    print("Image Size: ", img.size)
     img.save(buffered, format="JPEG")
     cur_img_encoded = base64.b64encode(buffered.getvalue()).decode('utf-8')
+    preamble = "You are provided with an object type, and a corresponding feature to evaluate within the image. Please only provide the value of the feature that corresponds to the instance witin the cropped image."
+    msg = preamble + f"\nObject Type: {obj_tp}\nFeature to evaluate: {feature}\n\nValue: "
     cur_message = {
                 "role": "user",
                 "content": [
                         {
                             "type": "text",
-                            "text": f"Now please evaluate the following feature given the above examples, the current object type, and image.\nObject Type: {obj_tp}\nFeature to evaluate: {feature}\n\nPlease do not return anything semantically equivalent to \'unknown\'.\n"
+                            "text": msg,
                         },
                         {
                             "type": "image_url",
@@ -490,14 +637,8 @@ def get_feature_vals(cropped_img, coord, obj_tp, feature):
                         }
                     ]
             }
-    messages = [
-        message_1,
-        message_2,
-        message_3,
-        message_4,
-        message_5,
-        cur_message
-    ]
+
+    messages.append(cur_message)
     
     # Query VLM
     client = instructor.from_openai(OpenAI(api_key=openai_api_key), mode=instructor.Mode.MD_JSON)
@@ -508,11 +649,324 @@ def get_feature_vals(cropped_img, coord, obj_tp, feature):
       max_tokens=300,
     )
 
+    print("Object Type: ", obj_tp, " Feature: ", feature)
+    print("Message Text: ", cur_message['content'][0]['text'])
+    print("Response: ", response)
+
     return response.feature_val
+
+# Query VLM to get feature values of the object instance in the cropped image
+def get_feature_vals(cropped_img, coord, obj_tp, feature, cfg):
+
+    """
+    Get the value of a given feature corresponding to an object instance of a given type
+
+    Inputs:
+        cropped_img:            The current RGB image observation, cropped around the object instance
+        coord:                  The pixel coordinate of the instance
+        obj_tp:                 The object type of the current instance
+        feature:                The feature to be evalutated
+
+    Outputs:
+        responsed.feature_val:  The predicted value of 'feature' of the current instance of 'obj_tp'
+    """
+
+    img = Image.fromarray(cropped_img).convert('RGB')
+    draw = ImageDraw.Draw(img)
+    draw.ellipse(
+        (
+            coord[0] - cfg.visual_prompt.circle_radius,
+            coord[1] - cfg.visual_prompt.circle_radius,
+            coord[0] + cfg.visual_prompt.circle_radius,
+            coord[1] + cfg.visual_prompt.circle_radius,
+        ),
+        fill=(200, 200, 200, 255),
+        outline=(0, 0, 0, 255),
+        width=3,
+    )
+
+    draw.text(
+        tuple(coord.astype(int).tolist()),
+        'A',
+        fill=(0, 0, 0, 255),
+        anchor="mm",
+        font_size=15,
+    )
+
+    #import matplotlib as mpl
+    #mpl.use('TkAgg')
+    #from matplotlib import pyplot as plt 
+    #plt.imshow(img)
+    print("Showing labeled image")
+    #plt.show()
+    #import matplotlib as mpl
+    #mpl.use('Agg')
+    #from matplotlib import pyplot as plt 
+
+    ##################################################
+    # SET UP PROMPT WITH PREVIOUS IMAGES AS EXAMPLES #
+    ##################################################
+
+    # TEMP -- No preprompt?
+    #messages = get_pre_prompt_msgs()
+    messages = []
+    # END TEMP
+
+    
+    buffered = BytesIO()
+    img.save(buffered, format="JPEG")
+    cur_img_encoded = base64.b64encode(buffered.getvalue()).decode('utf-8')
+    fm = FeatureMessage(obj_tp=obj_tp, feature=feature)
+    cur_message = {
+                "role": "user",
+                "content": [
+                        {
+                            "type": "text",
+                            "text": "Given the above examples, please provide an answer for this final message and image: " + fm.make_msg()
+                        },
+                        {
+                            "type": "image_url",
+                            "image_url":{"url" : f"data:image/png;base64,{cur_img_encoded}"}
+                        }
+                    ]
+            }
+
+    messages.append(cur_message)
+    
+    # Query VLM
+    client = instructor.from_openai(OpenAI(api_key=openai_api_key), mode=instructor.Mode.MD_JSON)
+    response = client.chat.completions.create(
+      model="gpt-4o-mini-2024-07-18",
+      response_model=Feature,
+      messages=messages,
+      max_tokens=300,
+    )
+
+    print("Object Type: ", obj_tp, " Feature: ", feature)
+    print("Message Text: ", cur_message['content'][0]['text'])
+    print("Response: ", response)
+
+    return response.feature_val
+
+def equivalent_to_obj_type(instance_type, obj_tp):
+    """
+    Use LLM to determin if the two strings are equivalent
+    """
+
+    prompt = f"Is the object instance of type {instance_type} equivalent to the object type {obj_tp}?"
+
+    cur_message = {
+        "role": "user",
+        "content": [
+                {
+                    "type": "text",
+                    "text": prompt
+                },
+            ]
+    }
+    messages = [
+        cur_message
+    ]
+    
+    # Query VLM
+    client = instructor.from_openai(OpenAI(api_key=openai_api_key), mode=instructor.Mode.MD_JSON)
+    response = client.chat.completions.create(
+      model="gpt-4o-mini-2024-07-18",
+      response_model=EquivalentClass,
+      messages=messages,
+      max_tokens=300,
+    )
+
+    print("\nPrompt\n", prompt)
+    print("\nResponse\n", response)
+
+    return response.equivalent
+
+def get_approx_centroid(seg_inst, inst_id):
+    """
+    Get the approximate middle pixel of this semantic instance
+    """
+
+    candidate_centroids = np.argwhere(np.array(seg_inst.detach().cpu()) == inst_id)
+
+    max_x = np.max(candidate_centroids[:,0])
+    min_x = np.min(candidate_centroids[:,0])
+    max_y = np.max(candidate_centroids[:,1])
+    min_y = np.min(candidate_centroids[:,1])
+
+    center_of_bbox = np.array([(max_x + min_x) / 2, (max_y + min_y) / 2])
+
+    # Get candidate pixels closest to center of bbox
+    best_pix = candidate_centroids[0]
+    best_dist = np.sqrt((best_pix[0] - center_of_bbox[0])**2 + (best_pix[1] - center_of_bbox[1])**2)
+    for pix in candidate_centroids:
+        dist = np.sqrt((pix[0] - center_of_bbox[0])**2 + (pix[1] - center_of_bbox[1])**2)
+
+        if dist < best_dist:
+            best_dist = dist
+            best_pix = pix
+
+    p_x = best_pix[1]
+    p_y = best_pix[0]
+
+    ret_pix = np.array([p_x, p_y])
+
+    assert seg_inst[ret_pix[1]][ret_pix[0]] == inst_id
+
+    return ret_pix
+
+
+def get_pixel_coords_from_sim_data(obj_tp, obs):
+    """
+    Used for debugging. Prompts user to select coordinates in the image based on obj_tp
+
+    Inputs:
+        obj_tp:         The object type to look for in the image
+        obs:            The observation from the simulator -- included semantic segmentation
+
+    Ouputs:
+        coords:         A list of pixel coordinates cooresponding to the user's selection
+    """
+
+    # Get the instance IDs in the observation
+    unique_semantic_inst_ids = np.unique(obs['seg_inst'].detach().cpu())
+    
+    # Get the semantic names
+    class_names = []
+    for inst_id in unique_semantic_inst_ids:
+        class_id = np.max(np.where(obs['seg_inst'].detach().cpu() == inst_id, obs['seg_sem'].detach().cpu(), 0))
+
+        class_names.append(obs['info']['obs_info']['rob']['rob:eyes:Camera:0']['seg_semantic'][class_id])
+
+    # Get pixel values for approximate centroid of each instance
+    pixels = []
+    for i in range(len(unique_semantic_inst_ids)):
+        if class_names[i] != "unlabelled" and equivalent_to_obj_type(class_names[i], obj_tp):
+            # Check if enough visible pixels
+            if np.sum(np.where(obs['seg_inst'].detach().cpu() == inst_id, 1, 0)) > 5000:
+                pixels.append(get_approx_centroid(obs['seg_inst'], unique_semantic_inst_ids[i]))
+
+    return pixels
+
+
+def get_perfect_perception_coords(obj_tp, img):
+    """
+    Used for debugging. Prompts user to select coordinates in the image based on obj_tp
+
+    Inputs:
+        obj_tp:         The object type to look for in the image
+        img:            The image to select coordinates in 
+
+    Ouputs:
+        coords:         A list of pixel coordinates cooresponding to the user's selection
+    """
+
+    # Print object type so user knows
+    print(f"Please select all centroids for instances of {obj_tp}")
+
+    root = tk.Tk()
+    img = np.copy(img)
+    app = PixelSelector(root, img)
+    root.mainloop()
+
+    pixels = np.array(app.pixels)
+
+    # Clean up the gui
+    root.destroy()
+    app.shutdown()
+    del(app)
+    del(root)
+
+    return pixels
+
+def get_3d_bounding_boxes(obs, p_x, p_y, cur_real_world_coord):
+    # Get 3D Bounding Boxes
+    seg_id = obs['seg_sem'][p_y, p_x].detach().cpu().item()
+
+    print(seg_id)
+
+    cur_extents = None
+    best_dist = -1
+
+    # For 3D bounding box transforms
+    for bbox in obs['bbox_3d']:
+        if bbox[0] == seg_id:
+            x_min, y_min, z_min, x_max, y_max, z_max = get_bbox_3d_corners(bbox)
+            if (x_min <= cur_real_world_coord[0] and # x_min
+                    y_min <= cur_real_world_coord[1] and # y_min
+                    z_min <= cur_real_world_coord[2] and # z_min
+                    x_max >= cur_real_world_coord[0] and # x_max
+                    y_max >= cur_real_world_coord[1] and # y_max
+                    z_max >= cur_real_world_coord[2]): # z_max
+
+                cur_extents = {
+                    'x_min': x_min,
+                    'y_min': y_min,
+                    'z_min': z_min,
+                    'x_max': x_max,
+                    'y_max': y_max,
+                    'z_max': z_max
+                }
+
+                break
+            else: # Keep track of closest
+                x_c = (x_min + x_max) / 2
+                y_c = (y_min + y_max) / 2
+                z_c = (z_min + z_max) / 2
+
+                dist = np.sqrt(
+                        (x_c - cur_real_world_coord[0]) ** 2 \
+                        + (y_c - cur_real_world_coord[1]) ** 2 \
+                        + (z_c - cur_real_world_coord[2]) ** 2)
+
+                if dist < best_dist or best_dist == -1:
+                    best_dist = dist
+                    cur_extents = {
+                        'x_min': x_min,
+                        'y_min': y_min,
+                        'z_min': z_min,
+                        'x_max': x_max,
+                        'y_max': y_max,
+                        'z_max': z_max
+                    }
+
+    
+    #assert cur_extents != None
+    # TEMP THIS IF SHOULDN"T GET EXPLORED BUT WANT TO RUN END TO END
+    #if cur_extents == None:
+    #    plt.plot([4,5,6])
+    #    plt.show()
+    #    assert False
+    # END TEMP
+
+    return cur_extents
+
+def get_real_world_from_bbox(obs, p_x, p_y, cur_real_world_coord):
+    cur_extents = get_3d_bounding_boxes(obs, p_x, p_y, cur_real_world_coord)
+
+    if cur_extents == None:
+        inst_id = obs['seg_inst'][p_y,p_x].detach().cpu()
+        class_id = np.max(np.where(obs['seg_inst'].detach().cpu() == inst_id, obs['seg_sem'].detach().cpu(), 0))
+
+        print("Class Name: ", obs['info']['obs_info']['rob']['rob:eyes:Camera:0']['seg_semantic'][class_id])
+        return None
+
+    x_min = cur_extents['x_min']
+    x_max = cur_extents['x_max']
+    y_min = cur_extents['y_min']
+    y_max = cur_extents['y_max']
+    z_min = cur_extents['z_min']
+    z_max = cur_extents['z_max']
+
+    x_c = (x_min + x_max) / 2
+    y_c = (y_min + y_max) / 2
+    z_c = (z_min + z_max) / 2
+
+    return np.array([x_c, y_c, z_c])
 
 
 # Use main object detection from image method
-def obj_detection_molmo(vlm, molmo_tools, cam_int_mat, obj_tp, rgb_img, depth_img, config, camera_pos, camera_pose, feature=None):
+def obj_detection_molmo(vlm, molmo_tools, cam_int_mat, obj_tp, obs, config, camera_pos, camera_pose, feature=None, old_pix_coords=None):
 
     """
     Use molmo to detect pixel values of object instances within image
@@ -531,6 +985,7 @@ def obj_detection_molmo(vlm, molmo_tools, cam_int_mat, obj_tp, rgb_img, depth_im
         camera_pose:        The rotation + translation matrix of the camera in the simulator map frame
         feature:            (Optional) a string reperesnting a "feature" to predict about the object of type
                                 'obj_tp'
+        old_pix_coords:     Pixel coords from previous object detection -- for feature evaluation
     Outputs:
         coords:             A list of coordinates in the pixel coordinate frame representing any 
                                 instance of 'obj_tp' found within the current observation
@@ -540,44 +995,81 @@ def obj_detection_molmo(vlm, molmo_tools, cam_int_mat, obj_tp, rgb_img, depth_im
                                 of 'feature' at that voxel
         logits:             Confidence about the prediction at each of these coordinates
     """
-
+    rgb_img = obs['rgb']
+    depth_img = obs['depth']
     img = np.copy(rgb_img)
     #Image should be torch tensor
     img = Image.fromarray(img).convert('RGB')
 
-    coords = []
-    # Check if instance exists (to help with MOLMO false positives)
-    # If instance exists, get coordinates from MOLMO
-    if instance_exists(img, obj_tp):
-        coords = get_pixel_coords_molmo(molmo_tools, obj_tp, img)
+    if old_pix_coords is None:
+        coords = []
+        # Use perfect perception if debugging with that is set in config
+        if config['use_perfect_perception']:
+            if config['use_sim_data_for_perception']:
+                coords = get_pixel_coords_from_sim_data(obj_tp, obs) 
+            else:
+                assert False # Need to make sure pixel values align for feature detection here too
+                coords = get_perfect_perception_coords(obj_tp, np.copy(rgb_img))
+
+        else:
+            # Check if instance exists (to help with MOLMO false positives)
+            # If instance exists, get coordinates from MOLMO
+            if instance_exists(img, obj_tp):
+                coords = get_pixel_coords_molmo(molmo_tools, obj_tp, img)
+    else:
+        coords = old_pix_coords
 
     # With all the pixel coordinates get the real world coordinates
     # and any feature values (if feature is not None)
     feature_ret_vals = [] 
     real_world_coords = []
+    ret_pix_coords = []
     for coord in coords:
         cropped_img = np.copy(rgb_img)
-        p_x = min(cropped_img.shape[1] - 1, max(0, int(coord[0] * (cropped_img.shape[1]-1) / 100)))
-        p_y = min(cropped_img.shape[0] - 1, max(0, int(coord[1] * (cropped_img.shape[0]-1) / 100)))
+        p_x = coord[0]
+        p_y = coord[1]
 
         cur_depth = depth_img[p_y, p_x]
 
-        real_world_coords.append(get_world_coords_from_depth(p_x, p_y, cur_depth, camera_pos, camera_pose, cam_int_mat))
+        cur_real_world_coord = get_world_coords_from_depth(p_x, p_y, cur_depth, camera_pos, camera_pose, cam_int_mat)
+        if config['use_sim_data_for_perception']:
+            cur_real_world_coord = get_real_world_from_bbox(obs, p_x, p_y, cur_real_world_coord)
+            if cur_real_world_coord is not None:
+                real_world_coords.append(cur_real_world_coord)
+                ret_pix_coords.append(coord)
+        else:
+            real_world_coords.append(cur_real_world_coord)
         if feature != None:
-            feature_ret_vals.append(get_feature_vals(cropped_img, coord, obj_tp, feature))
+            if feature == 'bbox_3d':
+                cur_extents = get_3d_bounding_boxes(obs, p_x, p_y, cur_real_world_coord)
+                feature_ret_vals.append(cur_extents)
+            else:
+                if config['use_sim_data_for_perception']:
+                    inst_id = int(obs['seg_inst'][p_y, p_x].detach().cpu())
+                    pix_vals = np.array(np.argwhere(obs['seg_inst'].detach().cpu() == inst_id))
+                    x_min = np.min(pix_vals[1,:])
+                    x_max = np.max(pix_vals[1,:])
+                    y_min = np.min(pix_vals[0,:])
+                    y_max = np.max(pix_vals[0,:])
+
+                    feature_ret_vals.append(get_feature_vals_cropped(np.copy(cropped_img[y_min:y_max, x_min:x_max]), coord, obj_tp, feature, config))
+                else:
+                    feature_ret_vals.append(get_feature_vals(cropped_img, coord, obj_tp, feature, config))
+
+    print("Real World Coords Selected: ", real_world_coords)
 
     # Return the score as well
     logits = []
-    for i in range(len(coords)):
+    for i in range(len(ret_pix_coords)):
         logits.append(0.9)
 
-    return coords, real_world_coords, feature_ret_vals, logits
+    return ret_pix_coords, real_world_coords, feature_ret_vals, logits
 
 # Main observation function
 # First get all of the free space predictions from the depth image
 # Then use RGB image to find object instances and their features
 # Put the observations into the belief space (voxels) and return
-def get_vox_preds(vlm, molmo_tools, robot_yaw, camera_pos, camera_pose, belief, obj_tp, rgb_image, depth_image, config, obstacle_map, camera_intrinsic_mat, feature=None, iteration=0):
+def get_vox_preds(vlm, molmo_tools, robot_yaw, camera_pos, camera_pose, belief, obj_tp, obs, config, obstacle_map, camera_intrinsic_mat, feature=None, iteration=0, old_pix_coords=None):
     """
     Function to get predicted value of existence at each voxel (for an object type)
     given observation
@@ -600,6 +1092,7 @@ def get_vox_preds(vlm, molmo_tools, robot_yaw, camera_pos, camera_pose, belief, 
         feature:                If not 'None' this string represents the feature of the object
                                     to generate predictions about
         iteration:              The current simulator step
+        old_pix_coords:         For feature updating -- use pixel coords from main object detection
 
     Outputs:
     return voxel_preds, feature_vox_ret_vals, (len(pix_coords) > 0), pix_coords, real_world_coords
@@ -631,17 +1124,17 @@ def get_vox_preds(vlm, molmo_tools, robot_yaw, camera_pos, camera_pose, belief, 
     print("AND DIM: ", dim)
 
     print("Starting FOV")
-    voxel_preds = get_fov_from_depth_image(camera_pos, camera_pose, depth_image, voxel_preds, resolution, belief.map_params['z_res'], dim, vol_origin, config, camera_intrinsic_mat)
+    voxel_preds = get_fov_from_depth_image(camera_pos, camera_pose, obs['depth'], voxel_preds, resolution, belief.map_params['z_res'], dim, vol_origin, config, camera_intrinsic_mat)
 
     # Get object detection
-    pix_coords, real_world_coords, feature_ret_vals, logits = obj_detection_molmo(vlm, molmo_tools, camera_intrinsic_mat, obj_tp, rgb_image, depth_image, config, camera_pos, camera_pose, feature=feature)
+    pix_coords, real_world_coords, feature_ret_vals, logits = obj_detection_molmo(vlm, molmo_tools, camera_intrinsic_mat, obj_tp, obs, config, camera_pos, camera_pose, feature=feature, old_pix_coords=old_pix_coords)
 
     # Based on real world coordinates from object detection
     # Get voxel coordinates (in belief space) to return for updating
     # the belief
     print("First BOXES")
     feature_vox_ret_vals = []
-    for i in range(len(real_world_coords)):
+    for i in range(len(pix_coords)):
         x, y, z = real_world_coords[i]
         print("REAL WORLD: ", x,y,z)
         score = logits[i]

@@ -18,17 +18,16 @@ A WhereClause object defines a predicate over an object type to filter the objec
 `
 class WhereClause:
     def __init__(self, where_tp:str, obj_tp:str, sub_where_clause:list[WhereClause]=None, obj_tp2:str=None,
-        scalar_feature:str=None, scalar_param:str=None, scalar_comparator:str=None, enum_feature:str=None, enum_param:str=None,
-        spatial_relation:str=None):
+        scalar_feature:str=None, scalar_param:str=None, scalar_comparator:str=None, enum_feature:str=None, enum_param:str=None):
         # initialization code for WhereClause
 `
-- `where_tp` and `obj_tp` are always required. `where_tp` can be one of: "feature_enum", "feature_scalar", "max", "min", "spatial_rel", "and", "or", "not", "true".
+- `where_tp` and `obj_tp` are always required. `where_tp` can be one of: "feature_enum", "feature_scalar", "max", "min", "and", "or", "not", "true".
 - If `where_tp="feature_enum"`, then both `enum_feature` and `enum_param` must also be provided. Example: all tables (`obj_tp`) whose color (`enum_feature`) is brown (`enum_param`).
 - If `where_tp="feature_scalar"`, then `scalar_feature`, `scalar_param`, and `scalar_comparator` are necessary. Example: all tables (`obj_tp`) with a height (`scalar_feature`) greater than (`scalar_comparator`) 4ft (`scalar_parameter`).
 - If `where_tp="max"` or `where_tp="min"`, then only `scalar_feature` is required. Example: the table (`obj_tp`) with the maximum height (`scalar_feature`).
-- If `where_tp="spatial_rel"`, then both `spatial_relation` and `obj_tp2` are needed. Example: all apples (`obj_tp`) that are on top of (`spatial_relation`) a table (`obj_tp2`).
 - If where_tp is one of the logical operators "and", "or", "not", then `sub_where_clause` must be provided.
 - `where_tp="true"` indicates no constraints.
+- Additionally, `obj_tp` must always match the `obj_tp` of the corresponding query.
 
 
 === Count ===
@@ -37,14 +36,6 @@ A Count object is used to obtain the number of instances in a queried set of obj
 class Count:
     def __init__(self, query: Query, obj_tp: str): 
         # initialization code for Count
-`
-
-=== Percent ===
-A Percent object is used to obtain the percent of instances in a queried set of objects that satisfy the query, out of the total number of instances. Constructor signature:
-`
-class Percent:
-    def __init__(self, query: Query, obj_tp: str): 
-        # initialization code for Percent
 `
 
 === Map ===

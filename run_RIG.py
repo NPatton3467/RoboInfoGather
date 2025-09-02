@@ -12,7 +12,7 @@ os.environ["HABITAT_SIM_LOG"] = (
     "quiet"  # https://aihabitat.org/docs/habitat-sim/logging.html
 )
 os.environ["MAGNUM_LOG"] = "quiet"
-#os.environ["CUDA_VISIBLE_DEVICES"] = "3,4,5"
+#os.environ["CUDA_VISIBLE_DEVICES"] = "0,1,2,3,4,5"
 import numpy as np
 
 np.set_printoptions(precision=3)
@@ -21,6 +21,8 @@ import pickle
 import logging
 import math
 import quaternion
+import matplotlib as mpl
+mpl.use('Agg')
 import matplotlib.pyplot as plt
 from PIL import Image, ImageDraw, ImageFont
 from tqdm import tqdm
@@ -31,6 +33,7 @@ from RoboInfoGather.program_utils import *
 from RoboInfoGather.MCTS_planner import *
 from RoboInfoGather.map_utils import *
 from RoboInfoGather.info_gather_runner import *
+from RoboInfoGather.test_frontier_selection import *
 
 # Simulator Imports
 import omnigibson as og
@@ -50,7 +53,7 @@ gm.ENABLE_FLATCACHE = True
 from transformers import AutoModelForCausalLM, AutoProcessor, GenerationConfig
 from src.geom import get_cam_intr
 import importlib
-VLM = importlib.import_module('explore-eqa.src.vlm').VLM
+#VLM = importlib.import_module('explore-eqa.src.vlm').VLM
 
 
 def load_models(cfg):
@@ -61,28 +64,40 @@ def load_models(cfg):
     """
 
     # Load VLM 
-    vlm = VLM(cfg.vlm)
-    vlm.model._supports_cache_class = False
+    if not cfg.use_perfect_perception:
+        # TEMP?
+        #vlm = VLM(cfg.vlm)
+        #vlm.model._supports_cache_class = False
+        vlm = None
+        # END TEMP?
+    else:
+        vlm = None
 
     # Load Molmo
     # Set up MOLMO
-    processor = AutoProcessor.from_pretrained(
-        #'allenai/Molmo-72B-0924',
-        #'allenai/MolmoE-1B-0924',
-        'allenai/Molmo-7B-D-0924',
-        trust_remote_code=True,
-        torch_dtype='auto',
-        device_map='auto'
-    )
+    if not cfg.use_perfect_perception:
+        processor = AutoProcessor.from_pretrained(
+            #'allenai/Molmo-72B-0924',
+            #'allenai/MolmoE-1B-0924',
+            'allenai/Molmo-7B-D-0924',
+            #'allenai/Molmo-7B-O-0924',
+            trust_remote_code=True,
+            torch_dtype=torch.float16,
+            device_map='auto'
+        )
 
-    molmo_model = AutoModelForCausalLM.from_pretrained(
-        #'allenai/Molmo-72B-0924',
-        #'allenai/MolmoE-1B-0924',
-        'allenai/Molmo-7B-D-0924',
-        trust_remote_code=True,
-        torch_dtype='auto',
-        device_map='auto'
-    )
+        molmo_model = AutoModelForCausalLM.from_pretrained(
+            #'allenai/Molmo-72B-0924',
+            #'allenai/MolmoE-1B-0924',
+            'allenai/Molmo-7B-D-0924',
+            #'allenai/Molmo-7B-O-0924',
+            trust_remote_code=True,
+            torch_dtype=torch.float16,
+            device_map='auto'
+        )
+    else:
+        molmo_model = None
+        processor = None
 
     molmo_tools = {'model': molmo_model, 'processor': processor}
 
@@ -109,6 +124,10 @@ def setup_environment(cfg, questions_data, question_ind):
     scene_name = questions_data[question_ind]['scene']
     scene_config_file = cfg.scene_config_path + f"{scene_name}.yaml"
     scene_config = yaml.load(open(scene_config_file, "r"), Loader=yaml.FullLoader)
+    
+    # TEMP
+    #scene_config["scene"]["load_object_categories"] = ["floors", "walls", "ceilings", "Cube", "PrimitiveObject"]
+
     env = og.Environment(configs=scene_config)
 
     resolution = scene_config['scene']['trav_map_resolution']
@@ -130,17 +149,22 @@ def setup_environment(cfg, questions_data, question_ind):
     env.robots[0]._sensors['rob:scan_link:Lidar:0'].set_position_orientation(cur_scan_pos, rob_ori)
 
     # Change Camera Mounting
+    # TEMP
+    print("Aperature: ", env.robots[0]._sensors['rob:eyes:Camera:0'].camera_parameters["cameraAperture"][0])
+    env.robots[0]._sensors['rob:eyes:Camera:0'].horizontal_aperture = 50
+    env.robots[0]._sensors['rob:eyes:Camera:0'].camera_parameters["cameraAperture"][0] = 50
+    print("Aperature: ", env.robots[0]._sensors['rob:eyes:Camera:0'].camera_parameters["cameraAperture"][0])
+    # END TEMP
+
     camera_pos, camera_ori = env.robots[0]._sensors['rob:eyes:Camera:0'].get_position_orientation()
     camera_pos[2] += 0.2
     env.robots[0]._sensors['rob:eyes:Camera:0'].set_position_orientation(camera_pos, camera_ori)
-    camera_tilt = cfg.camera_tilt_deg * np.pi / 180
     img_width, img_height = env.robots[0]._sensors['rob:eyes:Camera:0'].camera_parameters["renderProductResolution"]
     cam_intr = np.array(env.robots[0]._sensors['rob:eyes:Camera:0'].intrinsic_matrix.detach().cpu())
 
     camera_data = {
             'camera_pos': camera_pos,
             'camera_ori': camera_ori,
-            'camera_tilt': camera_tilt,
             'img_data': {'w': img_width, 'h': img_height},
             'cam_intr': cam_intr
         }
@@ -148,14 +172,51 @@ def setup_environment(cfg, questions_data, question_ind):
     # Floor - use pts height as floor height
     floor_height = 0.01
     map_size = trav_map.shape[0]
+
+    # TEMP
     tsdf_bnds = np.array(
             [
                 [(-map_size/2.0)*resolution, (map_size/2.0)*resolution],
                 [(-map_size/2.0)*resolution, (map_size/2.0)*resolution],
                 [floor_height - 0.2, floor_height + 3.5]
             ])
+
+    print(trav_map)
+    
+    """
+    x_min = -1
+    x_max = -1
+    for x in range(map_size):
+        if x_min == -1 and np.sum(trav_map[:,x]) > 0:
+            x_min = x
+        if x_max == -1 and np.sum(trav_map[:,map_size-x-1]) > 0:
+            x_max = x - 1
+    y_min = -1
+    y_max = -1
+    for y in range(map_size):
+        if y_min == -1 and np.sum(trav_map[y,:]) > 0:
+            y_min = y
+        if y_max == -1 and np.sum(trav_map[map_size-y-1,:]) > 0:
+            y_max = y - 1
+
+    print(f"X min/max {x_min}/{x_max}")
+    print(f"Y min/max {y_min}/{y_max}")
+    tsdf_bnds = np.array(
+            [
+                [(-map_size/2.0 + x_min)*resolution, (map_size/2.0 - x_max)*resolution],
+                [(-map_size/2.0 + y_min)*resolution, (map_size/2.0 - y_max)*resolution],
+                [floor_height - 0.2, floor_height + 3.5]
+            ])
+
+
+    """
+    # END TEMP
+
     scene_size = (map_size * resolution) ** 2
-    num_step = int(math.sqrt(scene_size) * cfg.max_step_room_size_ratio)*3 #TODO: REMOVE 3x
+
+    num_step = scene_config['num_step']
+    print("NUMBER OF STEPS: ", num_step)
+    
     logging.info(
         f"Scene size: {scene_size} Floor height: {floor_height} Steps: {num_step}"
     )
@@ -166,15 +227,20 @@ def setup_environment(cfg, questions_data, question_ind):
             'tsdf_bnds': tsdf_bnds,
             'scene_size': scene_size,
             'num_step': num_step,
-            'debug_f_path': setup_debug_dir(cfg, question_ind)
+            'debug_f_path': setup_debug_dir(cfg, question_ind),
+            'trav_map': trav_map,
+            'scene_name': scene_name
         }
-    
+ 
     # Get initial points and angle
     position_data = init_position_data(env)
 
     return env, camera_data, scene_data, position_data
 
 def setup_debug_dir(cfg, question_ind):
+    if not os.path.isdir(cfg.debug_path):
+        os.mkdir(cfg.debug_path)
+
     debug_f_path = cfg.debug_path + f"{question_ind}/"
     if not os.path.isdir(debug_f_path):
         os.mkdir(debug_f_path)
@@ -217,9 +283,21 @@ def extract_task_info(questions_data, question_ind):
     return task_info
 
 def init_position_data(env):
-    init_pts, _ = env.robots[0].get_position_orientation()
+    init_pts, ori = env.robots[0].get_position_orientation()
+
+    # TEMP
+    #init_pts[0] -= 1.5
+    #env.robots[0].set_position_orientation(init_pts, ori)
+    #action = OrderedDict([('rob', np.array([0 , 0]))])
+    #state, _, _, _, info = env.step(action) # Take Empty step to get observations
+    #state, _, _, _, info = env.step(action) # Take Empty step to get observations
+    #state, _, _, _, info = env.step(action) # Take Empty step to get observations
+    #init_pts, ori = env.robots[0].get_position_orientation()
+    # END TEMP
+
     init_pts = np.array(init_pts.cpu().detach())
-    pitch, roll, init_angle = env.robots[0].get_rpy()
+
+    roll, pitch, init_angle = env.robots[0].get_rpy()
     init_angle = init_angle.cpu().detach()
 
     position_data = {
@@ -231,38 +309,39 @@ def init_position_data(env):
 
     return position_data
 
-def save_all_data(cfg, results_all, cnt_data, cum_sim_score, question_ind):
-    with open(os.path.join(cfg.output_dir, "results.pkl"), "wb") as f:
-        pickle.dump(results_all, f)
-
-    logging.info(f"\n== All Summary")
-    logging.info(f"Number of data collected: {cnt_data}")
-    
-    print("Cumulative Sim Score: ", cum_sim_score)
-    print("Current Number of Questions: ", question_ind+1)
-    print("LLM-Match %: ", cum_sim_score/(question_ind+1)*100)
-
-def main(cfg):
+def main(cfg, question_ind):
     # Load dataset
     questions_data = load_dataset(cfg)
    
     # Load Models
     vlm_models = load_models(cfg) 
 
-    # Run all questions
-    cnt_data = 0
-    results_all = []
+    cnt_data = question_ind
     cum_sim_score = 0
-    for question_ind in tqdm(range(len(questions_data))):
-        # Setup environment
-        env, camera_data, scene_data, position_data = setup_environment(cfg, questions_data, question_ind)
 
-        # Get task information
-        task_info = extract_task_info(questions_data, question_ind)
+    # Setup environment
+    env, camera_data, scene_data, position_data = setup_environment(cfg, questions_data, question_ind)
 
-        ###################################
-        # Run Info Gathering for the Task #
-        ###################################
+    # Get task information
+    task_info = extract_task_info(questions_data, question_ind)
+
+    ###################################
+    # Run Info Gathering for the Task #
+    ###################################
+    if cfg.test_frontier:
+        result = test_frontier(
+                cfg,
+                env,
+                camera_data,
+                scene_data,
+                task_info,
+                cum_sim_score,
+                cnt_data,
+                position_data,
+                vlm_models,
+                question_ind
+            )
+    else:
         result = info_gather_runner(
                 cfg,
                 env,
@@ -272,18 +351,13 @@ def main(cfg):
                 cum_sim_score,
                 cnt_data,
                 position_data,
-                vlm_models
+                vlm_models,
+                question_ind
             )
-        
-        # Save data
-        results_all.append(result)
-        cnt_data += 1
+    
+    print("Result: ", result)
 
-        og.clear()
-
-
-    # Save all data again
-    save_all_data(cfg, results_all, cnt_data, cum_sim_score, question_ind)
+    og.shutdown()
 
 if __name__ == "__main__":
     import argparse
@@ -292,6 +366,7 @@ if __name__ == "__main__":
     # get config path
     parser = argparse.ArgumentParser()
     parser.add_argument("-cf", "--cfg_file", help="cfg file path", default="", type=str)
+    parser.add_argument("-qind", "--question_index", help="Question Index to run", default=0, type=int)
     args = parser.parse_args()
     cfg = OmegaConf.load(args.cfg_file)
     OmegaConf.resolve(cfg)
@@ -310,6 +385,8 @@ if __name__ == "__main__":
         ],
     )
 
+    question_ind = args.question_index
+
     # run
-    logging.info(f"***** Running {cfg.exp_name} *****")
-    main(cfg)
+    logging.info(f"***** Running {cfg.exp_name} at Question {question_ind} *****")
+    main(cfg, question_ind)
