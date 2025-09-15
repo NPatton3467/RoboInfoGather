@@ -134,24 +134,27 @@ def get_bbox_3d_corners(bbox):
 
 
 # Get new point in real coords based on robot position
-def get_new_node(current_loc, dist, angle, belief):
+def get_new_node(current_loc, theta, dist, angle, pitch, belief):
     # In robot frame: robot direction is X-axis.
 
     # Find the X,Y locations of the point in robot frame 
     # from distance and angle
-    new_x = np.cos(angle) * dist
-    new_y = np.sin(angle) * dist
+    new_x = np.cos(pitch) * np.cos(angle) * dist
+    new_y = np.cos(pitch) * np.sin(angle) * dist
+    new_z = np.sin(pitch) * dist
 
     # Do a rotation based on robot theta to get delta x,y in real coords
-    delta_x = new_x * np.cos(current_loc.theta) - new_y * np.sin(current_loc.theta)
-    delta_y = new_x * np.sin(current_loc.theta) + new_y * np.cos(current_loc.theta)
+    delta_x = new_x * np.cos(theta) - new_y * np.sin(theta)
+    delta_y = new_x * np.sin(theta) + new_y * np.cos(theta)
+    delta_z = new_z
 
     # Get actual x and y based off of current loc
-    real_x = current_loc.x + delta_x
-    real_y = current_loc.y + delta_y
+    real_x = current_loc[0] + delta_x
+    real_y = current_loc[1] + delta_y
+    real_z = current_loc[2] + delta_z
 
     # Get Map xy
-    return real_x, real_y
+    return real_x, real_y, real_z
 
 # Use camera params to get real world coordinates from (x,y) pixel and depth image
 def get_world_coords_from_depth(x, y, depth, camera_pos, camera_pose, camera_intrinsic_mat):
@@ -241,7 +244,11 @@ def get_fov_from_depth_image(camera_pos, camera_pose, raw_depth_image, voxel_pre
                 # Set voxel pred location to 0 here
                 v_xyz = world_to_map(world_coords, vol_origin, resolution, z_res, dim)
                 if not np.isnan(world_coords[2]):
-                    voxel_preds[v_xyz[0], v_xyz[1], v_xyz[2]] = config['observation_calc_params']['prob_occ_given_obs_free']
+                    # Calculated prediction based on distance
+                    distance = np.linalg.norm(world_coords - camera_pos)
+                    distance_weighting = 10 - (9 * np.exp(-0.3 * distance))
+                    pred = config['observation_calc_params']['prob_occ_given_obs_free']
+                    voxel_preds[v_xyz[0], v_xyz[1], v_xyz[2]] = pred * distance_weighting
 
                 cur_depth += (resolution / 2)
 
@@ -251,14 +258,14 @@ def get_fov_from_depth_image(camera_pos, camera_pose, raw_depth_image, voxel_pre
     return voxel_preds
                 
 # Get FOV based only on known obstacle map and camera orientation
-def get_fov(current_location, config, camera_params, obstacle_map, belief, debug_print=True):
+def get_fov(current_location, current_angle, config, camera_params, obstacle_map, belief, debug_print=True):
     min_angle = camera_params['min_angle']
     max_angle = camera_params['max_angle']
     min_v_dist = camera_params['min_visual_distance']
     max_v_dist = camera_params['max_visual_distance']
 
     angle_delta = config['rf_params']['angle_delta']
-    dist_delta = min(0.15, obstacle_map._voxel_size * 0.8)
+    dist_delta = config['rf_params']['dist_delta']
 
     angle = min_angle
 
@@ -266,49 +273,54 @@ def get_fov(current_location, config, camera_params, obstacle_map, belief, debug
     inflated_resized_obstacle_map = obstacle_map._tsdf_vol_cpu
 
     fov = []
-    obstacles = []
     while angle < max_angle:
-        dist = 0
-        if debug_print:
-            print(len(fov))
-        while dist < max_v_dist:
-            # Get node that corresponds to angle and dist (relative to robot)
-            x, y = get_new_node(current_location, dist, angle, belief)
+        pitch = min_angle
+        while pitch < max_angle:
+            dist = 0
+            if debug_print:
+                print(len(fov))
 
-            # Skip if already added
-            if (x, y) in fov:
-                assert False #???
+            numerator = (pitch - min_angle) * (angle - min_angle)
+            denomenator = (max_angle - min_angle) ** 2
+            print(f"Percent Complete FOV Finding: {(numerator/denomentaor):.2f}%")
+            while dist < max_v_dist:
+                # Get node that corresponds to angle and dist (relative to robot)
+                x, y, z = get_new_node(current_location, current_angle, dist, angle, pitch, belief)
+
+                # Skip if already added
+                if (x, y, z) in fov:
+                    dist += dist_delta
+                    continue
+
+                # Check that x,y are within map bounds and not occluded 
+                o_size_x = inflated_resized_obstacle_map.shape[0]
+                o_size_y = inflated_resized_obstacle_map.shape[1]
+                o_size_z = inflated_resized_obstacle_map.shape[2]
+                o_xyz = obstacle_map.world2vox(np.array([x, y, z]))
+                if o_xyz[0] not in range(0, o_size_x) or o_xyz[1] not in range(0, o_size_y) or\
+                        o_xyz[2] not in range(0, o_size_z):
+                    break
+                
+
+                # Check if voxel is occupied and explored
+                unoccupied = (obstacle_map._tsdf_vol_cpu[o_xyz[0], o_xyz[1], o_xyz[2]] > 0)
+                unexplored = (not obstacle_map._explore_vol_cpu[o_xyz[0], o_xyz[1], o_xyz[2]])
+
+                if not unoccupied and not unexplored:
+                    break
+
+                if dist > min_v_dist:
+                    fov.append((x,y,z))
+
+                # Increment distance
                 dist += dist_delta
-                continue
 
-            # Check that x,y are within map bounds and not occluded 
-            o_size_x = inflated_resized_obstacle_map.shape[0]
-            o_size_y = inflated_resized_obstacle_map.shape[1]
-            o_xy = obstacle_map.world2vox(np.array([x, y, 0]))
-            if o_xy[0] not in range(0, o_size_x) or o_xy[1] not in range(0, o_size_y):
-                break
-            
-
-            # Check if new location would cause a collision
-            height_voxel = int(0.4 / obstacle_map._voxel_size) + obstacle_map.min_height_voxel
-            unoccupied = np.logical_and(
-                obstacle_map._tsdf_vol_cpu[o_xy[0], o_xy[1], height_voxel] > 0, obstacle_map._tsdf_vol_cpu[o_xy[0], o_xy[1], 0] < 0
-            )
-
-            if unoccupied:
-                obstacles.append((x,y))
-                break
-
-            if dist > min_v_dist:
-                fov.append((x,y))
-
-            # Increment distance
-            dist += dist_delta
+            pitch += angle_delta
 
         # Increment angle
         angle += angle_delta
 
-    return fov, obstacles
+    return fov
 
 # Query VLM to see if an instance of obj_tp exists in img
 def instance_exists(img, obj_tp):
@@ -1024,6 +1036,7 @@ def obj_detection_molmo(vlm, molmo_tools, cam_int_mat, obj_tp, obs, config, came
     feature_ret_vals = [] 
     real_world_coords = []
     ret_pix_coords = []
+    ret_pixel_count = []
     for coord in coords:
         cropped_img = np.copy(rgb_img)
         p_x = coord[0]
@@ -1037,6 +1050,11 @@ def obj_detection_molmo(vlm, molmo_tools, cam_int_mat, obj_tp, obs, config, came
             if cur_real_world_coord is not None:
                 real_world_coords.append(cur_real_world_coord)
                 ret_pix_coords.append(coord)
+                
+                # Calculate the number of pixels of the same semantic class
+                seg_inst = np.array(obs['seg_inst'].detach().cpu())
+                pixel_count = np.sum(np.where(seg_inst == seg_inst[p_y, p_x], 1, 0))
+                ret_pixel_count.append(pixel_count)
         else:
             real_world_coords.append(cur_real_world_coord)
         if feature != None:
@@ -1061,7 +1079,26 @@ def obj_detection_molmo(vlm, molmo_tools, cam_int_mat, obj_tp, obs, config, came
     # Return the score as well
     logits = []
     for i in range(len(ret_pix_coords)):
-        logits.append(0.9)
+        # Weight Logits by distance
+        distance = np.linalg.norm(camera_pos - real_world_coords[i])
+        distance_weighting = 0.55 - (0.45 * np.exp(-0.4 * distance))
+        
+        if config['observation_calc_params']['use_model_score']:
+            assert False # need to implement
+        else:
+            default_pred = config['observation_calc_params']['prob_correct_given_observed']
+        pred = default_pred * distance_weighting
+
+        # Weight by number of pixels
+        pixel_count = ret_pixel_count[i]
+        pixel_percent = pixel_count / (rgb_img.shape[0] + rgb_img.shape[1])
+        pixel_weight = 1 / (1 + np.exp(-10 * pixel_percent))
+
+        pred *= pixel_weight
+
+        pred = max(0.65, pred)
+
+        logits.append(pred)
 
     return ret_pix_coords, real_world_coords, feature_ret_vals, logits
 
@@ -1150,10 +1187,7 @@ def get_vox_preds(vlm, molmo_tools, robot_yaw, camera_pos, camera_pose, belief, 
             print("MAP: ", vxyz)
 
             # Put score in prediction output
-            if config['observation_calc_params']['use_model_score']:
-                voxel_preds[vxyz[0], vxyz[1], vxyz[2]] = score
-            else:
-                voxel_preds[vxyz[0], vxyz[1], vxyz[2]] = config['observation_calc_params']['prob_correct_given_observed']
+            voxel_preds[vxyz[0], vxyz[1], vxyz[2]] = score
 
             if feature != None:
                 feature_vox_ret_vals.append([vxyz, feature_ret_vals[i]])

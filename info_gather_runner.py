@@ -25,6 +25,57 @@ from scipy.spatial.transform import Rotation
 
 from collections import OrderedDict
 
+def get_sampled_point(pts, angle, cfg, pomdp, tsdf_planner, scene_data):
+    best_reward = 0
+    best_sample_pt_world_space = None
+    best_sample_angle = None
+
+    num_checked = 0
+
+
+    while num_checked < cfg['planner_params']['max_num_samples']:
+        num_checked += 1
+
+        # Find where legal
+        _, unoccupied = tsdf_planner.get_island_around_pts(pts)
+        legal_locs_in_tsdf_space = np.argwhere(unoccupied)
+
+        # Bin samples
+        loc_bin = np.random.randint(0, cfg.rf_params.num_loc_bins)
+        ang_bin = np.random.randint(0, cfg.rf_params.num_ang_bins)
+
+        num_legal = legal_locs_in_tsdf_space.shape[0]
+        sample_loc_min = int(loc_bin * (num_legal / cfg.rf_params.num_loc_bins))
+        sample_loc_max = int(min(num_legal, (loc_bin + 1) * (num_legal / cfg.rf_params.num_loc_bins)))
+        sample_loc_idx = np.random.randint(sample_loc_min, sample_loc_max)
+        sample_loc_in_tsdf_space = legal_locs_in_tsdf_space[sample_loc_idx]
+
+
+        sample_ang_min = int(ang_bin * (360 / cfg.rf_params.num_ang_bins))
+        sample_ang_max = int(min(360, (ang_bin + 1) * (360 / cfg.rf_params.num_ang_bins)))
+        sampled_angle = np.deg2rad(np.random.randint(sample_ang_min, sample_ang_max))
+
+        # Compute reward
+        reward = 0
+        sample_loc_in_world_space = sample_loc_in_tsdf_space[:2] * tsdf_planner._voxel_size + tsdf_planner._vol_origin[:2]
+        for key in pomdp.bel.keys():
+            belief = pomdp.bel[key]
+            reward_pt = np.array([sample_loc_in_world_space[0],
+                                sample_loc_in_world_space[1],
+                                pts[2]])
+            reward += pomdp.reward_funcs[key].eval(belief, tsdf_planner, reward_pt, sampled_angle)
+
+        # Check if new best
+        if reward > best_reward or best_sample_pt_world_space is None:
+            best_sample_pt_world_space = sample_loc_in_world_space
+            best_sample_angle = sampled_angle
+
+    fig, ax = plt.subplots()
+    best_sample_pt_world_space = np.append(best_sample_pt_world_space, scene_data['floor_height']) 
+
+    return best_sample_pt_world_space, best_sample_angle, fig
+
+
 def get_perfect_next_point(tsdf_planner, scene_data):
     """
     Used for debugging. Prompts user to select coordinates in the image based on obj_tp
@@ -683,6 +734,9 @@ def get_next_point(
         return get_perfect_next_point(tsdf_planner, scene_data)
     elif cfg['no_tsdf_vlm']:
         # get the new camera position
+        if cfg['use_sampling']:
+            return get_sampled_point(camera_pos, angle, cfg, pomdp, tsdf_planner, scene_data)
+
         cam_pts_normal, angle, _, fig = tsdf_planner.find_next_pose(
             pts=camera_pos,
             angle=angle,
@@ -879,8 +933,13 @@ def info_gather_runner(
         # Save pointcloud for debugging
         #np.save(debug_f_path+f"point_cloud_{cnt_step}.npy", pt_cloud)
 
-        #np.save(debug_f_path+f"img_{cnt_step}.npy", obs['rgb'])
-        #np.save(debug_f_path+f"depth_img_{cnt_step}.npy", obs['depth'])
+        np.save(debug_f_path+f"img_{cnt_step}.npy", obs['rgb'])
+        np.save(debug_f_path+f"depth_img_{cnt_step}.npy", obs['depth'])
+        with open(debug_f_path+f"bbox_3d_{cnt_step}.pkl", 'wb') as f:
+            pickle.dump(obs['bbox_3d'], f)
+        np.save(debug_f_path+f"seg_inst_{cnt_step}.npy", np.array(obs['seg_inst'].detach().cpu()))
+        np.save(debug_f_path+f"seg_semantic_{cnt_step}.npy", np.array(obs['seg_sem'].detach().cpu()))
+        np.save(debug_f_path+f"info_{cnt_step}.npy", obs['info'])
 
         #################
         # Update Belief #
@@ -974,6 +1033,7 @@ def info_gather_runner(
     
     end_time = time.time()
     result['wall_time'] = end_time - start_time
+    result['tsdf_planner'] = tsdf_planner
 
     # Save result
     with open(

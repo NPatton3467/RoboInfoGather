@@ -17,6 +17,8 @@ def main(cfg, cfg_filename):
 
     # Run all questions
     for question_ind in tqdm(range(len(questions_data))):
+        if question_ind > 0:
+            continue
         # Call bash script to run run_RIG.py with current question index
         print(f"./stream_script_new.sh python RoboInfoGather/run_RIG.py -cf {cfg_filename} -qind {str(question_ind)}")
         completed_process = subprocess.run(["./stream_script_new.sh",
@@ -27,8 +29,6 @@ def main(cfg, cfg_filename):
 
         print(completed_process)
         print(completed_process.returncode)
-
-        assert False
 
 
 if __name__ == "__main__":

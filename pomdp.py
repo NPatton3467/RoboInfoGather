@@ -50,6 +50,8 @@ class POMDP():
             map_params = get_map_params(obj_tp, self.trav_map_original_dim, self.trav_map_original_resolution, self.vol_origin, configs)
 
             self.bel[obj_tp] = ObjTpBel(num, thresh, map_params, self.configs, relevant_features)
+            
+            self.reward_funcs[obj_tp] = RewardFunc(map_params, self.camera_params, self.rf_params)
 
         # Save figures for drawing (one per belief)
         if self.configs['bel_params']['visualize']:

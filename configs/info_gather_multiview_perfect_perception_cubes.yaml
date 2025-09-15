@@ -11,7 +11,6 @@ debug_path: ./RoboInfoGather/results/RIG_multi_view_perfect_perception_exp/debug
 
 vlm:
   device: cuda:3
-  hf_token: <TOKEN>
   model_id: prism-dinosiglip+7b
 
 # Camera, image

@@ -1,5 +1,4 @@
-#num_step: 50
-num_step: 1
+num_step: 50
 env:
   initial_pos_z_offset: 0.1
 

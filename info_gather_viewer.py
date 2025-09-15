@@ -209,9 +209,9 @@ def get_env_bev(env_file, make_new_bev=False, shape=None):
 
     return env
 
-def get_bel_maps(bel_file, shape):
+def get_bel_maps(bel, shape):
     # TODO: Expand to cover multiple beliefs for same task
-    belief = np.rot90(np.flip(np.load(bel_file), axis=1), k=1)
+    belief = np.rot90(np.flip(bel, axis=1), k=1)
     #belief = np.mean(belief, axis=-1)
     belief = np.max(belief, axis=-1)
 
@@ -245,11 +245,7 @@ def get_tsdf(tsdf_file, shape=None):
 
     return tsdf
 
-def get_result_pts(result_file, shape):
-    with open(result_file, 'rb') as f:
-        result = pkl.load(f)
-
-    pomdp = result['pomdp']
+def get_result_pts(pomdp, shape):
 
     # Execute query to get symbolic result
     # TEMP
@@ -363,7 +359,11 @@ if __name__ == "__main__":
 
     # Get result points
     result_file = f'{exp_f_path}/results_{task_index}.pkl'
-    result_pts = get_result_pts(result_file, floor.shape)
+    with open(result_file, 'rb') as f:
+        result = pkl.load(f)
+
+    pomdp = result['pomdp']
+    result_pts = get_result_pts(pomdp, floor.shape)
    
     # Get belief maps
     task_objects = [
@@ -403,12 +403,13 @@ if __name__ == "__main__":
             'Rug',
             'Shelf'
         ]
-    bel_file = f'{exp_f_path}/debug/{task_index}/bel_{task_objects[task_index]}_29.npy'
-    belief_maps = get_bel_maps(bel_file, env.shape)
+   
+    belief_maps = get_bel_maps(np.array(pomdp.bel[task_objects[task_index]].p.detach().cpu()), env.shape)
 
     # Get TSDF
-    tsdf_file = f'{exp_f_path}/debug/{task_index}/tsdf_volume_29.npy'
-    tsdf = get_tsdf(tsdf_file, shape=floor.shape)
+    #tsdf_file = f'{exp_f_path}/debug/{task_index}/tsdf_volume_29.npy'
+    #tsdf = get_tsdf(tsdf_file, shape=floor.shape)
+    tsdf = None
 
     # Get viewpoints
     plan_pts = get_plan_pts(result_file, floor.shape)

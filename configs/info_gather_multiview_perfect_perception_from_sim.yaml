@@ -10,10 +10,10 @@ save_freq: 10
 debug_path: ./RoboInfoGather/results/RIG_multi_view_perfect_perception_from_sim_exp/debug/
 
 test_frontier: False
+use_sampling: True
 
 vlm:
   device: cuda:3
-  hf_token: <TOKEN>
   model_id: prism-dinosiglip+7b
 
 # Camera, image
@@ -73,16 +73,18 @@ visual_prompt:
 camera_params:
   #min_angle : -0.2617993877991494
   #max_angle : 0.2617993877991494
-    min_angle : -0.08726646259971647
-    max_angle : 0.08726646259971647
-    min_visual_distance : 0.5
-    max_visual_distance : 5
+    min_angle : -0.7853981633974483
+    max_angle : 0.7853981633974483
+    min_visual_distance : 0.1
+    max_visual_distance : 3
 
 rf_params:
     map_granularity_not_used : 0.5
     map_height : 2.5
-    angle_delta : 0.017453292519943295
-    dist_delta: 0.1
+    angle_delta : 0.08726646259971647 #0.017453292519943295
+    dist_delta: 0.25
+    num_loc_bins: 100
+    num_ang_bins: 4
 
 bel_params:
   torch_device: 'cuda:1'
@@ -108,13 +110,13 @@ planner_params:
   teleport: true
   max_rollout_depth: 100
   epsilon: 0.1
-  max_num_samples: 100
+  max_num_samples: 500
   sample_discretization: 100
   angle_sample_discretization: 45
 
 observation_calc_params:
   dne_occluded_prob: 0.35
-  prob_occ_given_obs_free: 0.01
+  prob_occ_given_obs_free: 0.05
   occluded_percent_to_ignore: 0.5
-  use_model_score: false
+  use_model_score: False
   prob_correct_given_observed: 0.999

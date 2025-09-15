@@ -13,7 +13,6 @@ test_frontier: True
 
 vlm:
   device: cuda:3
-  hf_token: <TOKEN>
   model_id: prism-dinosiglip+7b
 
 # Camera, image
